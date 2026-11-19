@@ -1,0 +1,8 @@
+[
+  {
+    "name": "Sample App",
+    "category": "Tools",
+    "desc": "My first hosted web app.",
+    "path": "./sample-app/index.html"
+  }
+]
