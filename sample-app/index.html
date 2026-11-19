@@ -1,0 +1,2017 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FilamentLab 3D — 3D Printer Material &amp; Mechanical Failure Simulator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+          },
+          colors: {
+            studio: {
+              950: '#070a12',
+              900: '#0c111d',
+              850: '#111827',
+              800: '#182234',
+              700: '#24324a',
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    /* Explicit high-contrast dark mode styling for native select dropdowns */
+    select.filament-select {
+      background-color: #1e293b;
+      color: #f8fafc;
+      color-scheme: dark;
+    }
+    select.filament-select option,
+    select.filament-select optgroup {
+      background-color: #1e293b;
+      color: #f8fafc;
+    }
+
+    /* Engineering range sliders */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: transparent;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-runnable-track {
+      height: 5px;
+      border-radius: 9999px;
+      background: #1e293b;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 15px;
+      height: 15px;
+      border-radius: 9999px;
+      background: #38bdf8;
+      border: 2px solid #0c111d;
+      box-shadow: 0 0 8px rgba(56, 189, 248, 0.5);
+      margin-top: -5px;
+      transition: transform 0.12s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+    }
+    input[type="range"]::-moz-range-track {
+      height: 5px;
+      border-radius: 9999px;
+      background: #1e293b;
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 15px;
+      height: 15px;
+      border-radius: 9999px;
+      background: #38bdf8;
+      border: 2px solid #0c111d;
+      box-shadow: 0 0 8px rgba(56, 189, 248, 0.5);
+    }
+
+    /* Subtle dark scrollbars */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #263349; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3b4d6b; }
+  </style>
+</head>
+<body class="bg-studio-950 text-slate-100 font-sans antialiased min-h-screen flex flex-col selection:bg-sky-500/30">
+
+  <!-- ===================== SLIM TOP HEADER BAR ===================== -->
+  <header class="sticky top-0 z-40 h-14 border-b border-slate-800/80 bg-studio-900/90 backdrop-blur-md px-4 flex items-center justify-between gap-3">
+    <!-- Brand -->
+    <div class="flex items-center gap-2.5 shrink-0">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-500/20 to-indigo-500/20 border border-sky-500/40 flex items-center justify-center">
+        <svg class="w-4 h-4 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+        </svg>
+      </div>
+      <span class="font-bold tracking-tight text-sm sm:text-base text-white">FilamentLab <span class="text-sky-400">3D</span></span>
+    </div>
+
+    <!-- Center 2-Tab Pill Switcher -->
+    <nav class="flex items-center bg-studio-950 p-1 rounded-xl border border-slate-800" aria-label="Main Navigation">
+      <button id="tab-lab" type="button" class="px-3 sm:px-4 py-1.5 rounded-lg text-xs font-semibold transition-all bg-sky-500/15 text-sky-300 border border-sky-500/30">
+        3D Test Lab
+      </button>
+      <button id="tab-matrix" type="button" class="px-3 sm:px-4 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-400 hover:text-slate-200 border border-transparent">
+        Material Matrix <span class="hidden sm:inline font-mono text-[10px] opacity-75">(16)</span>
+      </button>
+    </nav>
+
+    <!-- Right Quick Compare Toggle -->
+    <button id="btn-compare-header" type="button" class="px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-all bg-studio-850 border-slate-700/80 text-slate-300 hover:border-slate-600">
+      <span id="compare-dot" class="w-2 h-2 rounded-full bg-slate-500 transition-colors"></span>
+      <span class="hidden sm:inline">Compare A vs B</span>
+      <span class="sm:hidden">A vs B</span>
+    </button>
+  </header>
+
+  <!-- ===================== VIEW 1: 3D TEST LAB ===================== -->
+  <main id="view-lab" class="flex-1 flex flex-col lg:flex-row overflow-hidden">
+
+    <!-- LEFT COMPACT SCROLLABLE CONTROL SIDEBAR -->
+    <aside class="relative z-20 w-full lg:w-[324px] shrink-0 border-b lg:border-b-0 lg:border-r border-slate-800/80 bg-studio-900/85 p-4 space-y-4 overflow-y-auto lg:h-[calc(100vh-3.5rem)]">
+
+      <!-- 1. Filament Selector(s) -->
+      <div class="space-y-3">
+        <!-- Material A -->
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between text-[11px]">
+            <label for="sel-mat-a" class="font-semibold text-sky-300 uppercase tracking-wider font-mono flex items-center gap-1.5">
+              <span id="swatch-a" class="w-2.5 h-2.5 rounded-full ring-1 ring-white/25 inline-block shrink-0" style="background:#38bdf8"></span>
+              <span>Material A</span>
+            </label>
+            <span id="cat-a-badge" class="font-mono text-[10px] text-slate-400">Standard</span>
+          </div>
+          <select id="sel-mat-a" class="filament-select relative z-30 w-full border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm font-medium focus:outline-none focus:border-sky-400 transition-colors cursor-pointer"></select>
+          <div id="badges-a" class="flex flex-wrap gap-1 pt-0.5 font-mono text-[10px]"></div>
+        </div>
+
+        <!-- Material B (Visible in Compare Mode) -->
+        <div id="wrap-mat-b" class="hidden space-y-1.5 pt-2.5 border-t border-slate-800/70">
+          <div class="flex items-center justify-between text-[11px]">
+            <label for="sel-mat-b" class="font-semibold text-amber-300 uppercase tracking-wider font-mono flex items-center gap-1.5">
+              <span id="swatch-b" class="w-2.5 h-2.5 rounded-full ring-1 ring-white/25 inline-block shrink-0" style="background:#475569"></span>
+              <span>Material B</span>
+            </label>
+            <span id="cat-b-badge" class="font-mono text-[10px] text-slate-400">Engineering</span>
+          </div>
+          <select id="sel-mat-b" class="filament-select relative z-30 w-full border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm font-medium focus:outline-none focus:border-amber-400 transition-colors cursor-pointer"></select>
+          <div id="badges-b" class="flex flex-wrap gap-1 pt-0.5 font-mono text-[10px]"></div>
+        </div>
+      </div>
+
+      <!-- 2. Test Mode Segmented Control -->
+      <div class="space-y-1.5 pt-3 border-t border-slate-800/80">
+        <span class="text-[11px] font-mono uppercase tracking-wider text-slate-400 font-semibold">Test Mode</span>
+        <div class="grid grid-cols-3 gap-1.5 bg-studio-950 p-1 rounded-xl border border-slate-800" id="mode-group">
+          <button type="button" data-mode="bend" class="mode-btn py-1.5 rounded-lg text-xs font-semibold transition-all">3-Pt Bend</button>
+          <button type="button" data-mode="compression" class="mode-btn py-1.5 rounded-lg text-xs font-semibold transition-all">Compress</button>
+          <button type="button" data-mode="shear" class="mode-btn py-1.5 rounded-lg text-xs font-semibold transition-all">Shear</button>
+        </div>
+      </div>
+
+      <!-- 3. Applied Force & Ramp Controls -->
+      <div class="space-y-2.5 pt-3 border-t border-slate-800/80">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] font-mono uppercase tracking-wider text-slate-400 font-semibold">Applied Force</span>
+          <div class="flex items-center gap-1 bg-studio-950 border border-slate-700/80 rounded-lg px-2 py-0.5">
+            <input id="input-force" type="number" min="0" max="60000" step="10" value="0" class="w-16 bg-transparent text-right font-mono text-xs font-bold text-white focus:outline-none" />
+            <span class="font-mono text-[11px] text-slate-400">N</span>
+          </div>
+        </div>
+
+        <div class="space-y-1">
+          <input id="slider-force" type="range" min="0" max="1500" step="5" value="0" class="w-full" />
+          <div class="flex justify-between font-mono text-[10px] text-slate-500">
+            <span>0 N</span>
+            <span id="force-max-label">1,500 N</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-5 gap-2 pt-0.5">
+          <button id="btn-ramp" type="button" class="col-span-3 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-sky-500/20 transition-all active:scale-[0.98]">
+            <svg id="ramp-icon-play" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            <svg id="ramp-icon-pause" class="w-3.5 h-3.5 hidden" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>
+            <span id="btn-ramp-text">Ramp to Break</span>
+          </button>
+          <button id="btn-reset" type="button" class="col-span-2 py-2.5 rounded-xl bg-studio-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-semibold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+            <span>Reset</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 4. Print Orientation, Layer Thickness, Infill -->
+      <div class="space-y-3 pt-3 border-t border-slate-800/80">
+        <span class="text-[11px] font-mono uppercase tracking-wider text-slate-400 font-semibold">Print Settings</span>
+
+        <!-- Orientation 2x2 -->
+        <div class="grid grid-cols-2 gap-1.5" id="orient-group">
+          <button type="button" data-orient="flat" class="orient-btn px-2.5 py-2 rounded-xl border text-xs font-medium flex items-center gap-2 transition-all">
+            <span class="w-4 h-4 flex flex-col justify-center gap-0.5 opacity-80"><span class="h-0.5 bg-current"></span><span class="h-0.5 bg-current"></span><span class="h-0.5 bg-current"></span></span>
+            <span>Flat (XY)</span>
+          </button>
+          <button type="button" data-orient="edge" class="orient-btn px-2.5 py-2 rounded-xl border text-xs font-medium flex items-center gap-2 transition-all">
+            <span class="w-4 h-4 border border-current rounded-sm flex flex-col justify-evenly p-0.5 opacity-80"><span class="h-px bg-current"></span><span class="h-px bg-current"></span></span>
+            <span>On-Edge (XZ)</span>
+          </button>
+          <button type="button" data-orient="upright" class="orient-btn px-2.5 py-2 rounded-xl border text-xs font-medium flex items-center gap-2 transition-all">
+            <span class="w-4 h-4 flex items-center justify-center gap-0.5 opacity-80"><span class="w-0.5 h-3.5 bg-current"></span><span class="w-0.5 h-3.5 bg-current"></span><span class="w-0.5 h-3.5 bg-current"></span></span>
+            <span>Upright (Z)</span>
+          </button>
+          <button type="button" data-orient="diag45" class="orient-btn px-2.5 py-2 rounded-xl border text-xs font-medium flex items-center gap-2 transition-all">
+            <span class="w-4 h-4 flex flex-col justify-center gap-0.5 -rotate-45 opacity-80"><span class="h-0.5 bg-current"></span><span class="h-0.5 bg-current"></span><span class="h-0.5 bg-current"></span></span>
+            <span>45° Diag</span>
+          </button>
+        </div>
+
+        <!-- Layer Thickness Slider + 5 Preset Chips -->
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-slate-300 font-medium">Layer Thickness</span>
+            <span id="layer-val" class="font-mono font-semibold text-sky-300">0.20 mm</span>
+          </div>
+          <input id="slider-layer" type="range" min="0.08" max="0.32" step="0.02" value="0.20" class="w-full" />
+          <div class="grid grid-cols-5 gap-1" id="layer-chips">
+            <button type="button" data-lh="0.08" class="lh-chip py-1 rounded-md font-mono text-[10px] border transition-colors">0.08mm</button>
+            <button type="button" data-lh="0.12" class="lh-chip py-1 rounded-md font-mono text-[10px] border transition-colors">0.12mm</button>
+            <button type="button" data-lh="0.20" class="lh-chip py-1 rounded-md font-mono text-[10px] border transition-colors">0.20mm</button>
+            <button type="button" data-lh="0.28" class="lh-chip py-1 rounded-md font-mono text-[10px] border transition-colors">0.28mm</button>
+            <button type="button" data-lh="0.32" class="lh-chip py-1 rounded-md font-mono text-[10px] border transition-colors">0.32mm</button>
+          </div>
+          <div class="flex items-center justify-between text-[10px] font-mono text-slate-400 pt-0.5">
+            <span id="layer-count-readout">40 layers</span>
+            <span id="layer-factor-readout">Bond factor: 99%</span>
+          </div>
+        </div>
+
+        <!-- Infill Density Slider (20% - 100%) -->
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-slate-300 font-medium">Infill Density</span>
+            <span id="infill-val" class="font-mono font-semibold text-sky-300">100%</span>
+          </div>
+          <input id="slider-infill" type="range" min="20" max="100" step="5" value="100" class="w-full" />
+        </div>
+      </div>
+    </aside>
+
+    <!-- CENTER/RIGHT SPACIOUS 3D VIEWPORT + COLLAPSIBLE BOTTOM DRAWER -->
+    <div class="flex-1 flex flex-col min-w-0 lg:h-[calc(100vh-3.5rem)]">
+
+      <!-- Three.js 3D Viewport -->
+      <div id="viewport-container" class="relative flex-1 min-h-[380px] bg-studio-950 overflow-hidden select-none cursor-grab active:cursor-grabbing">
+        <canvas id="three-canvas" class="block w-full h-full"></canvas>
+
+        <!-- Floating Top-Left Live Telemetry HUD -->
+        <div id="hud-telemetry" class="pointer-events-none absolute top-3 left-3 right-3 sm:right-auto z-10 flex flex-col sm:flex-row gap-2 max-w-[calc(100%-1.5rem)]"></div>
+
+        <!-- Floating Top-Right Viewport Controls -->
+        <div class="absolute top-3 right-3 z-10 flex items-center gap-1.5 bg-studio-900/85 backdrop-blur-md border border-slate-800/90 p-1 rounded-xl shadow-xl">
+          <button id="btn-view-fea" type="button" class="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all bg-sky-500/20 text-sky-300 border border-sky-500/30">
+            FEA Stress
+          </button>
+          <button id="btn-view-real" type="button" class="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all text-slate-400 hover:text-slate-200 border border-transparent">
+            Realistic
+          </button>
+          <div class="w-px h-4 bg-slate-800 mx-0.5"></div>
+          <button id="btn-toggle-layers" type="button" title="Toggle 3D Layer Lines" class="px-2 py-1.5 rounded-lg text-[11px] font-semibold transition-all bg-studio-800 text-sky-300 border border-slate-700">
+            Layers
+          </button>
+          <button id="btn-reset-cam" type="button" title="Reset 3D Camera" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-studio-800 transition-colors">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+          </button>
+        </div>
+
+        <!-- Bottom Left Orbit Hint -->
+        <div class="pointer-events-none absolute bottom-3 left-3 z-10 hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-lg bg-studio-900/75 backdrop-blur-sm border border-slate-800/80 text-[10px] font-mono text-slate-400">
+          <span>Drag to Orbit · Scroll to Zoom</span>
+        </div>
+
+        <!-- Bottom Right FEA Color Scale -->
+        <div id="fea-legend-bar" class="pointer-events-none absolute bottom-3 right-3 z-10 flex items-center gap-2 px-2.5 py-1 rounded-lg bg-studio-900/80 backdrop-blur-sm border border-slate-800/80 text-[10px] font-mono text-slate-400">
+          <span>LOW</span>
+          <div class="w-20 h-2 rounded-full bg-gradient-to-r from-blue-500 via-emerald-400 via-yellow-400 to-rose-500"></div>
+          <span class="text-rose-400 font-semibold">PEAK</span>
+        </div>
+      </div>
+
+      <!-- Collapsible Bottom Drawer: Stress–Strain Curve & Failure Analysis -->
+      <div class="border-t border-slate-800/90 bg-studio-900/95 shrink-0">
+        <button id="btn-toggle-drawer" type="button" class="w-full px-4 py-2 flex items-center justify-between text-xs hover:bg-studio-850/60 transition-colors">
+          <div class="flex items-center gap-3">
+            <span class="font-mono uppercase tracking-wider text-[11px] font-semibold text-slate-300">Stress–Strain Curve &amp; Failure Analysis</span>
+            <span id="drawer-curve-legend" class="hidden sm:inline-flex items-center gap-3 text-[11px] font-mono"></span>
+          </div>
+          <svg id="drawer-chevron" class="w-4 h-4 text-slate-400 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+
+        <div id="drawer-body" class="px-4 pb-3 pt-1 grid grid-cols-1 md:grid-cols-12 gap-3 items-stretch">
+          <div id="curve-wrap" class="md:col-span-8 h-[148px] bg-studio-950 rounded-xl border border-slate-800/80 overflow-hidden relative">
+            <canvas id="curve-canvas" class="block w-full h-full"></canvas>
+          </div>
+          <div class="md:col-span-4 bg-studio-950 rounded-xl border border-slate-800/80 p-3 flex flex-col justify-between">
+            <div class="space-y-1">
+              <div class="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-semibold">Failure Mode Analysis</div>
+              <p id="failure-readout" class="text-xs text-slate-200 leading-relaxed"></p>
+            </div>
+            <div class="pt-2 mt-2 border-t border-slate-800/80 flex items-center justify-between font-mono text-[10px] text-slate-400">
+              <span id="specimen-dims-tag">80×16×8 mm Bar</span>
+              <span id="eff-mod-tag">Eff. E: 3.50 GPa</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===================== VIEW 2: MATERIAL MATRIX (16) ===================== -->
+  <section id="view-matrix" class="hidden flex-1 max-w-[1440px] w-full mx-auto px-4 sm:px-6 py-5 space-y-4">
+    <div class="bg-studio-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl space-y-4">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+        <div>
+          <h2 class="text-base sm:text-lg font-bold text-white">16-Filament Mechanical Property Matrix</h2>
+          <p class="text-xs text-slate-400 mt-0.5">
+            Live <span class="text-sky-300 font-medium">Break Force (N)</span> reflects active test settings:
+            <span id="matrix-settings-pill" class="font-mono text-[11px] bg-studio-950 border border-slate-800 text-sky-300 px-2 py-0.5 rounded-md ml-1"></span>
+          </p>
+        </div>
+
+        <div class="relative">
+          <svg class="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="matrix-search" type="text" placeholder="Search filament..." class="bg-studio-950 border border-slate-700/80 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-sky-400 w-48 sm:w-56" />
+        </div>
+      </div>
+
+      <!-- Category Filter Chips -->
+      <div class="flex flex-wrap items-center gap-1.5" id="matrix-cat-pills">
+        <button type="button" data-cat="All" class="cat-pill px-3 py-1 rounded-lg text-xs font-semibold border transition-all">All (16)</button>
+        <button type="button" data-cat="Standard" class="cat-pill px-3 py-1 rounded-lg text-xs font-semibold border transition-all">Standard</button>
+        <button type="button" data-cat="Flexible" class="cat-pill px-3 py-1 rounded-lg text-xs font-semibold border transition-all">Flexible</button>
+        <button type="button" data-cat="Engineering" class="cat-pill px-3 py-1 rounded-lg text-xs font-semibold border transition-all">Engineering</button>
+        <button type="button" data-cat="High-Temp" class="cat-pill px-3 py-1 rounded-lg text-xs font-semibold border transition-all">High-Temp</button>
+      </div>
+
+      <!-- Sortable Table -->
+      <div class="overflow-x-auto -mx-4 sm:mx-0">
+        <table class="w-full text-left border-collapse min-w-[960px]">
+          <thead>
+            <tr class="border-b border-slate-800 text-[11px] font-mono uppercase tracking-wider text-slate-400 select-none">
+              <th class="py-3 px-4 cursor-pointer hover:text-sky-300" data-sort="name">Material <span class="sort-ind"></span></th>
+              <th class="py-3 px-3 cursor-pointer hover:text-sky-300" data-sort="category">Category <span class="sort-ind"></span></th>
+              <th class="py-3 px-3 cursor-pointer hover:text-sky-300" data-sort="flexural">Flexural (MPa) <span class="sort-ind"></span></th>
+              <th class="py-3 px-3 cursor-pointer hover:text-sky-300" data-sort="compressive">Compressive (MPa) <span class="sort-ind"></span></th>
+              <th class="py-3 px-3 cursor-pointer hover:text-sky-300" data-sort="shear">Shear (MPa) <span class="sort-ind"></span></th>
+              <th class="py-3 px-3 cursor-pointer hover:text-sky-300" data-sort="modulus">Modulus (GPa) <span class="sort-ind"></span></th>
+              <th class="py-3 px-3 cursor-pointer hover:text-sky-300" data-sort="zAdhesion">Z-Adhesion <span class="sort-ind"></span></th>
+              <th class="py-3 px-3 cursor-pointer hover:text-sky-300 text-sky-300" data-sort="breakForce">Break Force (N) <span class="sort-ind">▼</span></th>
+              <th class="py-3 px-4 text-right">Load in 3D Lab</th>
+            </tr>
+          </thead>
+          <tbody id="matrix-tbody" class="divide-y divide-slate-800/70 text-xs sm:text-sm"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    (() => {
+      'use strict';
+
+      /* =========================================================================
+         1. 16-FILAMENT REALISTIC FDM DATABASE
+         ========================================================================= */
+      const FILAMENTS = [
+        { id: 'pla',     name: 'PLA',                   category: 'Standard',    modulus: 3500, flexural: 85,  compressive: 78,  shear: 42, elongation: 4.5,   zAdhesion: 0.55, temp: 210, color: '#38bdf8', roughness: 0.36, metalness: 0.06, behavior: 'brittle'   },
+        { id: 'plaplus', name: 'PLA+ (Tough PLA)',      category: 'Standard',    modulus: 3100, flexural: 80,  compressive: 72,  shear: 44, elongation: 12.0,  zAdhesion: 0.64, temp: 215, color: '#60a5fa', roughness: 0.38, metalness: 0.05, behavior: 'ductile'   },
+        { id: 'petg',    name: 'PETG',                  category: 'Standard',    modulus: 2100, flexural: 68,  compressive: 60,  shear: 38, elongation: 18.0,  zAdhesion: 0.74, temp: 240, color: '#2dd4bf', roughness: 0.24, metalness: 0.12, behavior: 'ductile'   },
+        { id: 'petgcf',  name: 'PETG-CF',               category: 'Engineering', modulus: 4600, flexural: 92,  compressive: 82,  shear: 45, elongation: 5.5,   zAdhesion: 0.58, temp: 255, color: '#475569', roughness: 0.65, metalness: 0.18, behavior: 'brittle'   },
+        { id: 'abs',     name: 'ABS',                   category: 'Engineering', modulus: 2200, flexural: 65,  compressive: 62,  shear: 36, elongation: 14.0,  zAdhesion: 0.50, temp: 245, color: '#fb923c', roughness: 0.44, metalness: 0.05, behavior: 'ductile'   },
+        { id: 'asa',     name: 'ASA',                   category: 'Engineering', modulus: 2350, flexural: 70,  compressive: 66,  shear: 39, elongation: 11.0,  zAdhesion: 0.56, temp: 250, color: '#facc15', roughness: 0.46, metalness: 0.05, behavior: 'ductile'   },
+        { id: 'pp',      name: 'PP (Polypropylene)',    category: 'Engineering', modulus: 1150, flexural: 42,  compressive: 44,  shear: 28, elongation: 65.0,  zAdhesion: 0.78, temp: 230, color: '#e2e8f0', roughness: 0.32, metalness: 0.04, behavior: 'ductile'   },
+        { id: 'tpu95a',  name: 'TPU 95A',               category: 'Flexible',    modulus: 95,   flexural: 32,  compressive: 42,  shear: 26, elongation: 140.0, zAdhesion: 0.88, temp: 225, color: '#f472b6', roughness: 0.52, metalness: 0.02, behavior: 'elastomer' },
+        { id: 'tpu85a',  name: 'TPU 85A',               category: 'Flexible',    modulus: 38,   flexural: 20,  compressive: 30,  shear: 18, elongation: 210.0, zAdhesion: 0.92, temp: 220, color: '#e879f9', roughness: 0.58, metalness: 0.02, behavior: 'elastomer' },
+        { id: 'pa6',     name: 'Nylon PA6',             category: 'Engineering', modulus: 2400, flexural: 88,  compressive: 78,  shear: 48, elongation: 32.0,  zAdhesion: 0.76, temp: 265, color: '#a78bfa', roughness: 0.42, metalness: 0.06, behavior: 'ductile'   },
+        { id: 'pa12',    name: 'Nylon PA12',            category: 'Engineering', modulus: 1850, flexural: 74,  compressive: 68,  shear: 44, elongation: 36.0,  zAdhesion: 0.70, temp: 260, color: '#818cf8', roughness: 0.45, metalness: 0.06, behavior: 'ductile'   },
+        { id: 'pacf',    name: 'PA-CF (Carbon Nylon)',  category: 'Engineering', modulus: 6800, flexural: 135, compressive: 118, shear: 58, elongation: 3.4,   zAdhesion: 0.48, temp: 275, color: '#334155', roughness: 0.72, metalness: 0.22, behavior: 'brittle'   },
+        { id: 'pagf',    name: 'PA-GF (Glass Nylon)',   category: 'Engineering', modulus: 5400, flexural: 118, compressive: 106, shear: 55, elongation: 5.2,   zAdhesion: 0.56, temp: 270, color: '#94a3b8', roughness: 0.62, metalness: 0.14, behavior: 'brittle'   },
+        { id: 'pc',      name: 'Polycarbonate (PC)',    category: 'Engineering', modulus: 2450, flexural: 102, compressive: 92,  shear: 54, elongation: 15.0,  zAdhesion: 0.64, temp: 275, color: '#7dd3fc', roughness: 0.22, metalness: 0.14, behavior: 'ductile'   },
+        { id: 'peek',    name: 'PEEK',                  category: 'High-Temp',   modulus: 4200, flexural: 162, compressive: 138, shear: 76, elongation: 16.0,  zAdhesion: 0.66, temp: 400, color: '#d6c3a5', roughness: 0.34, metalness: 0.10, behavior: 'ductile'   },
+        { id: 'ultem',   name: 'ULTEM 9085 (PEI)',      category: 'High-Temp',   modulus: 3100, flexural: 130, compressive: 122, shear: 68, elongation: 8.5,   zAdhesion: 0.62, temp: 365, color: '#d97706', roughness: 0.28, metalness: 0.12, behavior: 'brittle'   }
+      ];
+
+      const FILAMENT_MAP = Object.fromEntries(FILAMENTS.map(f => [f.id, f]));
+      const CATEGORIES = ['Standard', 'Flexible', 'Engineering', 'High-Temp'];
+
+      /* =========================================================================
+         2. APPLICATION STATE
+         ========================================================================= */
+      const state = {
+        activeTab: 'lab',
+        matA: 'pla',
+        matB: 'pacf',
+        compare: false,
+        mode: 'bend',        // 'bend' | 'compression' | 'shear'
+        orientation: 'flat', // 'flat' | 'edge' | 'upright' | 'diag45'
+        layerHeight: 0.20,   // 0.08 .. 0.32 mm
+        infill: 100,         // 20 .. 100 %
+        force: 0,            // Newtons
+        maxForce: 1500,      // Dynamic slider ceiling
+        ramping: false,
+        viewMode: 'fea',     // 'fea' | 'real'
+        showLayers: true,
+        drawerOpen: true,
+        // Matrix tab state
+        matrixCategory: 'All',
+        matrixSearch: '',
+        sortCol: 'breakForce',
+        sortDir: 'desc',
+        // Per-bay seamless fracture state (stores exact pre-break visual pose!)
+        anim: {
+          A: { broken: false, progress: 0, snap: null, lastPose: { defl: 0, crush: 0, slip: 0 } },
+          B: { broken: false, progress: 0, snap: null, lastPose: { defl: 0, crush: 0, slip: 0 } }
+        }
+      };
+
+      /* =========================================================================
+         3. PHYSICS ENGINE (ORIENTATION, LAYER THICKNESS, INFILL)
+         ========================================================================= */
+      function getLayerThicknessFactors(lh, orientation) {
+        let zBondFactor;
+        if (lh <= 0.14) {
+          zBondFactor = 0.99 + ((lh - 0.08) / 0.06) * 0.04; // 0.99 -> 1.03
+        } else {
+          zBondFactor = 1.03 - Math.pow((lh - 0.14) / 0.18, 1.15) * 0.21; // 1.03 -> 0.82
+        }
+        const inPlaneFactor = 1.01 - Math.max(0, (lh - 0.16) / 0.16) * 0.08;
+
+        let effective = inPlaneFactor;
+        if (orientation === 'upright') effective = zBondFactor;
+        else if (orientation === 'diag45') effective = 0.45 * inPlaneFactor + 0.55 * zBondFactor;
+        else if (orientation === 'edge') effective = 0.85 * inPlaneFactor + 0.15 * zBondFactor;
+
+        return { zBondFactor, inPlaneFactor, effective };
+      }
+
+      function getLayerCount(mode, orientation, lh) {
+        let heightMm = 8;
+        if (mode === 'compression') {
+          heightMm = orientation === 'diag45' ? 24 * Math.SQRT2 : 24;
+        } else {
+          if (orientation === 'flat') heightMm = 8;
+          else if (orientation === 'edge') heightMm = 16;
+          else if (orientation === 'upright') heightMm = 80;
+          else heightMm = (80 + 8) * 0.7071;
+        }
+        return Math.max(1, Math.round(heightMm / lh));
+      }
+
+      function getInfillFactors(infill, mode) {
+        const t = Math.max(0, Math.min(1, (infill - 20) / 80));
+        if (mode === 'bend') {
+          return { strength: 0.46 + 0.54 * Math.pow(t, 0.82), modulus: 0.50 + 0.50 * Math.pow(t, 0.82) };
+        }
+        if (mode === 'compression') {
+          return { strength: 0.26 + 0.74 * Math.pow(t, 0.95), modulus: 0.30 + 0.70 * Math.pow(t, 0.92) };
+        }
+        return { strength: 0.36 + 0.64 * Math.pow(t, 0.88), modulus: 0.38 + 0.62 * Math.pow(t, 0.88) };
+      }
+
+      function getOrientationFactors(mat, orientation, mode) {
+        const z = mat.zAdhesion;
+        if (mode === 'bend') {
+          if (orientation === 'flat')    return { strength: 1.00, modulus: 1.00 };
+          if (orientation === 'edge')    return { strength: 1.06, modulus: 1.04 };
+          if (orientation === 'upright') return { strength: z, modulus: 0.76 + 0.18 * z };
+          return { strength: 0.50 + 0.50 * z, modulus: 0.86 + 0.12 * z };
+        }
+        if (mode === 'compression') {
+          if (orientation === 'flat')    return { strength: 1.00, modulus: 0.96 };
+          if (orientation === 'edge')    return { strength: 0.64 + 0.36 * z, modulus: 1.00 };
+          if (orientation === 'upright') return { strength: 0.86 + 0.14 * z, modulus: 0.92 };
+          return { strength: 0.56 + 0.44 * z, modulus: 0.84 + 0.12 * z };
+        }
+        if (orientation === 'flat')    return { strength: 1.00, modulus: 1.00 };
+        if (orientation === 'edge')    return { strength: 0.96, modulus: 0.98 };
+        if (orientation === 'upright') return { strength: z, modulus: 0.74 + 0.22 * z };
+        return { strength: 0.60 + 0.40 * z, modulus: 0.85 + 0.12 * z };
+      }
+
+      function computePhysics(matId, force, mode, orientation, lh, infill) {
+        const mat = FILAMENT_MAP[matId] || FILAMENTS[0];
+        const ori = getOrientationFactors(mat, orientation, mode);
+        const lhf = getLayerThicknessFactors(lh, orientation);
+        const inf = getInfillFactors(infill, mode);
+
+        const baseStrength = mode === 'bend' ? mat.flexural : mode === 'compression' ? mat.compressive : mat.shear;
+        const ultimateStress = baseStrength * ori.strength * lhf.effective * inf.strength;
+        const effModulus = mat.modulus * ori.modulus * inf.modulus * (0.96 + 0.04 * lhf.inPlaneFactor);
+        const shearModulus = effModulus / 2.72;
+
+        let effElongation = mat.elongation;
+        if (orientation === 'upright' && (mode === 'bend' || mode === 'shear')) {
+          effElongation = Math.max(1.2, mat.elongation * (0.25 + 0.35 * mat.zAdhesion));
+        } else if (orientation === 'diag45') {
+          effElongation = Math.max(1.8, mat.elongation * (0.50 + 0.30 * mat.zAdhesion));
+        }
+
+        let stress = 0, breakForce = 0, deflection = 0, strainPct = 0;
+
+        if (mode === 'bend') {
+          const L = 80, b = 16, d = 8;
+          const I = (b * d * d * d) / 12;
+          const stressPerN = (3 * L) / (2 * b * d * d);
+          stress = force * stressPerN;
+          breakForce = ultimateStress / stressPerN;
+
+          const clampedForce = Math.min(force, breakForce);
+          const r = ultimateStress > 0 ? Math.min(1.0, (clampedForce * stressPerN) / ultimateStress) : 0;
+          const plastic = r > 0.72 ? 1 + Math.pow((r - 0.72) / 0.28, 2) * (mat.behavior === 'brittle' ? 0.15 : 0.65) : 1;
+          deflection = ((clampedForce * L * L * L) / (48 * effModulus * I)) * plastic;
+          strainPct = ((6 * d * deflection) / (L * L)) * 100;
+        } else if (mode === 'compression') {
+          const A = 576, H = 24;
+          stress = force / A;
+          breakForce = ultimateStress * A;
+
+          const clampedStress = Math.min(stress, ultimateStress);
+          const r = ultimateStress > 0 ? Math.min(1.0, clampedStress / ultimateStress) : 0;
+          const plastic = r > 0.72 ? 1 + Math.pow((r - 0.72) / 0.28, 2) * (mat.behavior === 'brittle' ? 0.15 : 0.55) : 1;
+          strainPct = (clampedStress / effModulus) * 100 * plastic;
+          deflection = (strainPct / 100) * H;
+        } else {
+          const A = 128, d = 8;
+          stress = force / A;
+          breakForce = ultimateStress * A;
+
+          const clampedStress = Math.min(stress, ultimateStress);
+          const r = ultimateStress > 0 ? Math.min(1.0, clampedStress / ultimateStress) : 0;
+          const plastic = r > 0.72 ? 1 + Math.pow((r - 0.72) / 0.28, 2) * (mat.behavior === 'brittle' ? 0.15 : 0.5) : 1;
+          const gamma = (clampedStress / shearModulus) * plastic;
+          strainPct = gamma * 100;
+          deflection = gamma * d;
+        }
+
+        const stressRatio = ultimateStress > 0 ? stress / ultimateStress : 0;
+        const safetyFactor = stress > 0.001 ? ultimateStress / stress : Infinity;
+
+        const isDelamRisk = (orientation === 'upright' && (mode === 'bend' || mode === 'shear')) || (orientation === 'edge' && mode === 'compression');
+        let status = 'INTACT';
+        if (stressRatio >= 1.0) {
+          status = isDelamRisk && mat.behavior !== 'elastomer' ? 'DELAMINATED' : 'FRACTURED';
+        } else if (stressRatio >= 0.75) {
+          status = 'YIELDING';
+        }
+
+        return {
+          mat, stress, ultimateStress, breakForce, effModulus, deflection, strainPct,
+          effElongation, stressRatio, safetyFactor, status,
+          isDelamRisk, layerFactor: lhf.effective, layerCount: getLayerCount(mode, orientation, lh)
+        };
+      }
+
+      // Consistent visual deformation mapping (used both pre-break AND to capture exact break pose)
+      function computeVisualDeform(phys) {
+        const isElastomer = phys.mat.behavior === 'elastomer';
+        const defl = Math.min(isElastomer ? 1.65 : 0.95, phys.deflection * (isElastomer ? 0.05 : 0.18));
+        const crush = Math.min(isElastomer ? 1.35 : 0.72, (phys.strainPct / 100) * 3.0 * (isElastomer ? 1.05 : 3.0));
+        const slip = Math.min(isElastomer ? 1.05 : 0.52, phys.deflection * (isElastomer ? 0.11 : 0.62));
+        return { defl, crush, slip };
+      }
+
+      /* =========================================================================
+         4. THREE.JS 3D ENGINE WITH ZERO-REBOUND FRACTURE CONTINUITY
+         ========================================================================= */
+      let scene, camera, renderer;
+      let rigA, rigB;
+      let sharedLayerTex = null, sharedBumpTex = null;
+
+      const orbit = {
+        theta: 0.50,
+        phi: 1.18,
+        radius: 13.5,
+        target: new THREE.Vector3(0, 0.15, 0),
+        isDragging: false,
+        lastX: 0,
+        lastY: 0,
+        pinchDist: 0
+      };
+
+      function updateCameraPosition() {
+        if (!camera) return;
+        const r = orbit.radius;
+        camera.position.set(
+          orbit.target.x + r * Math.sin(orbit.phi) * Math.sin(orbit.theta),
+          orbit.target.y + r * Math.cos(orbit.phi),
+          orbit.target.z + r * Math.sin(orbit.phi) * Math.cos(orbit.theta)
+        );
+        camera.lookAt(orbit.target);
+      }
+
+      function resetCamera() {
+        orbit.theta = state.compare ? 0.16 : 0.50;
+        orbit.phi = 1.18;
+        orbit.radius = state.compare ? 19.5 : 13.5;
+        orbit.target.set(0, 0.15, 0);
+        updateCameraPosition();
+      }
+
+      // Procedural FDM layer-line texture + bump map
+      function rebuildLayerTextures() {
+        if (sharedLayerTex) sharedLayerTex.dispose();
+        if (sharedBumpTex) sharedBumpTex.dispose();
+
+        const size = 512;
+        const diffCanvas = document.createElement('canvas');
+        diffCanvas.width = size; diffCanvas.height = size;
+        const dctx = diffCanvas.getContext('2d');
+
+        const bumpCanvas = document.createElement('canvas');
+        bumpCanvas.width = size; bumpCanvas.height = size;
+        const bctx = bumpCanvas.getContext('2d');
+
+        dctx.fillStyle = '#ffffff';
+        dctx.fillRect(0, 0, size, size);
+        bctx.fillStyle = '#808080';
+        bctx.fillRect(0, 0, size, size);
+
+        if (state.showLayers) {
+          const pitch = Math.max(4, Math.round((state.layerHeight / 0.32) * 26));
+          const grooveAlpha = 0.16 + ((state.layerHeight - 0.08) / 0.24) * 0.22;
+
+          const drawStripes = (ctx, isBump) => {
+            ctx.save();
+            ctx.translate(size / 2, size / 2);
+            if (state.orientation === 'upright') ctx.rotate(Math.PI / 2);
+            else if (state.orientation === 'diag45') ctx.rotate(-Math.PI / 4);
+            ctx.translate(-size, -size);
+
+            for (let y = 0; y < size * 2; y += pitch) {
+              const grad = ctx.createLinearGradient(0, y, 0, y + pitch);
+              if (isBump) {
+                grad.addColorStop(0.0, '#181818');
+                grad.addColorStop(0.22, '#c8c8c8');
+                grad.addColorStop(0.50, '#ffffff');
+                grad.addColorStop(0.78, '#c8c8c8');
+                grad.addColorStop(1.0, '#181818');
+              } else {
+                const dark = `rgba(12, 18, 30, ${grooveAlpha.toFixed(2)})`;
+                const light = 'rgba(255, 255, 255, 1)';
+                grad.addColorStop(0.0, dark);
+                grad.addColorStop(0.20, light);
+                grad.addColorStop(0.80, light);
+                grad.addColorStop(1.0, dark);
+              }
+              ctx.fillStyle = grad;
+              ctx.fillRect(0, y, size * 2, pitch);
+            }
+            if (state.orientation === 'edge' && !isBump) {
+              ctx.fillStyle = 'rgba(255,255,255,0.08)';
+              for (let x = 0; x < size * 2; x += pitch * 2) {
+                ctx.fillRect(x, 0, 2, size * 2);
+              }
+            }
+            ctx.restore();
+          };
+
+          drawStripes(dctx, false);
+          drawStripes(bctx, true);
+        }
+
+        sharedLayerTex = new THREE.CanvasTexture(diffCanvas);
+        sharedLayerTex.wrapS = THREE.RepeatWrapping;
+        sharedLayerTex.wrapT = THREE.RepeatWrapping;
+        sharedLayerTex.repeat.set(2, 1);
+
+        sharedBumpTex = new THREE.CanvasTexture(bumpCanvas);
+        sharedBumpTex.wrapS = THREE.RepeatWrapping;
+        sharedBumpTex.wrapT = THREE.RepeatWrapping;
+        sharedBumpTex.repeat.set(2, 1);
+
+        [rigA, rigB].forEach(rig => {
+          if (rig) rig.applyTextures(sharedLayerTex, sharedBumpTex);
+        });
+      }
+
+      // FEA Stress Heatmap RGB (0..1)
+      function getFEAColorRGB(ratio) {
+        const t = Math.max(0, Math.min(1, ratio));
+        if (t < 0.25) {
+          const u = t / 0.25;
+          return [0.14 * (1 - u) + 0.04 * u, 0.39 * (1 - u) + 0.72 * u, 0.92 * (1 - u) + 0.85 * u];
+        } else if (t < 0.5) {
+          const u = (t - 0.25) / 0.25;
+          return [0.04 * (1 - u) + 0.16 * u, 0.72 * (1 - u) + 0.82 * u, 0.85 * (1 - u) + 0.45 * u];
+        } else if (t < 0.78) {
+          const u = (t - 0.5) / 0.28;
+          return [0.16 * (1 - u) + 0.96 * u, 0.82 * (1 - u) + 0.78 * u, 0.45 * (1 - u) + 0.12 * u];
+        } else {
+          const u = (t - 0.78) / 0.22;
+          return [0.96 * (1 - u) + 0.96 * u, 0.78 * (1 - u) + 0.22 * u, 0.12 * (1 - u) + 0.32 * u];
+        }
+      }
+
+      // Helper: create a 3x3x3 diagonal triangular prism wedge for 45° compression shear fracture
+      function createDiagonalWedgeGeometry(isUpper) {
+        const shape = new THREE.Shape();
+        if (isUpper) {
+          // Upper-right triangle in XY: (-1.5, 1.5) -> (1.5, 1.5) -> (1.5, -1.5)
+          shape.moveTo(-1.5, 1.5);
+          shape.lineTo(1.5, 1.5);
+          shape.lineTo(1.5, -1.5);
+          shape.closePath();
+        } else {
+          // Lower-left triangle in XY: (-1.5, 1.5) -> (1.5, -1.5) -> (-1.5, -1.5)
+          shape.moveTo(-1.5, 1.5);
+          shape.lineTo(1.5, -1.5);
+          shape.lineTo(-1.5, -1.5);
+          shape.closePath();
+        }
+        const geo = new THREE.ExtrudeGeometry(shape, { depth: 3.0, bevelEnabled: false, steps: 1 });
+        geo.translate(0, 0, -1.5);
+        // Normalize UVs to 0..1 across 3x3 bounds so layer textures align seamlessly
+        const pos = geo.attributes.position;
+        const uv = geo.attributes.uv;
+        for (let i = 0; i < pos.count; i++) {
+          uv.setXY(i, (pos.getX(i) + 1.5) / 3.0, (pos.getY(i) + 1.5) / 3.0);
+        }
+        uv.needsUpdate = true;
+        const cols = new Float32Array(pos.count * 3).fill(1);
+        geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+        return geo;
+      }
+
+      function initVertexColors(geo) {
+        const cols = new Float32Array(geo.attributes.position.count * 3).fill(1);
+        geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+      }
+
+      // Reusable 3D Test Rig Bay
+      class TestRigBay {
+        constructor(bayKey) {
+          this.bayKey = bayKey;
+          this.root = new THREE.Group();
+
+          const steelMat = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.72, roughness: 0.32 });
+          const darkSteelMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.65, roughness: 0.42 });
+          const ramAccentMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.80, roughness: 0.25 });
+
+          // --- 1. 3-POINT BEND RIG (Supports at x = ±3.4, roller top at y = -0.18) ---
+          this.bendRig = new THREE.Group();
+          const bendBase = new THREE.Mesh(new THREE.BoxGeometry(9.2, 0.45, 2.8), darkSteelMat);
+          bendBase.position.y = -1.65;
+          this.bendRig.add(bendBase);
+
+          [-3.4, 3.4].forEach(sx => {
+            const stand = new THREE.Mesh(new THREE.BoxGeometry(0.65, 1.0, 2.2), darkSteelMat);
+            stand.position.set(sx, -0.95, 0);
+            const roller = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 2.3, 24), ramAccentMat);
+            roller.rotation.x = Math.PI / 2;
+            roller.position.set(sx, -0.46, 0);
+            this.bendRig.add(stand, roller);
+          });
+
+          this.bendRam = new THREE.Group();
+          const nose = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 2.3, 24), ramAccentMat);
+          nose.rotation.x = Math.PI / 2;
+          const neck = new THREE.Mesh(new THREE.BoxGeometry(0.75, 1.1, 1.6), steelMat);
+          neck.position.y = 0.65;
+          const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 3.2, 16), darkSteelMat);
+          shaft.position.y = 2.6;
+          this.bendRam.add(nose, neck, shaft);
+          this.bendRig.add(this.bendRam);
+          this.root.add(this.bendRig);
+
+          // --- 2. COMPRESSION RIG (Bottom platen top at y = -1.50) ---
+          this.compRig = new THREE.Group();
+          const botPlaten = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.8, 0.56, 32), darkSteelMat);
+          botPlaten.position.y = -1.78;
+          this.compRig.add(botPlaten);
+
+          this.compRam = new THREE.Group();
+          const topPlaten = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 0.45, 32), steelMat);
+          topPlaten.position.y = 0.225;
+          const compShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 3.0, 20), ramAccentMat);
+          compShaft.position.y = 1.85;
+          this.compRam.add(topPlaten, compShaft);
+          this.compRig.add(this.compRam);
+          this.root.add(this.compRig);
+
+          // --- 3. SHEAR RIG (Clamp on x < 0, moving blade on x > 0) ---
+          this.shearRig = new THREE.Group();
+          const clampLower = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.4, 2.6), darkSteelMat);
+          clampLower.position.set(-2.12, -1.2, 0);
+          const clampUpper = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.75, 2.6), steelMat);
+          clampUpper.position.set(-2.12, 0.88, 0);
+          this.shearRig.add(clampLower, clampUpper);
+
+          this.shearBlade = new THREE.Group();
+          const bladeBody = new THREE.Mesh(new THREE.BoxGeometry(1.15, 1.6, 2.4), ramAccentMat);
+          bladeBody.position.set(0.62, 0.8, 0);
+          const bladeShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 2.8, 16), darkSteelMat);
+          bladeShaft.position.set(0.62, 2.8, 0);
+          this.shearBlade.add(bladeBody, bladeShaft);
+          this.shearRig.add(this.shearBlade);
+          this.root.add(this.shearRig);
+
+          // --- SPECIMEN MATERIAL ---
+          this.specMat = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            vertexColors: true,
+            roughness: 0.40,
+            metalness: 0.08,
+            bumpScale: 0.055
+          });
+
+          // --- BRITTLE SHARD PARTICLES ---
+          this.shardGroup = new THREE.Group();
+          this.shards = [];
+          const shardGeo = new THREE.TetrahedronGeometry(0.11);
+          this.shardMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.4, metalness: 0.1 });
+          for (let i = 0; i < 14; i++) {
+            const m = new THREE.Mesh(shardGeo, this.shardMat);
+            m.visible = false;
+            this.shardGroup.add(m);
+            this.shards.push({
+              mesh: m,
+              vel: new THREE.Vector3(),
+              rotVel: new THREE.Vector3()
+            });
+          }
+          this.root.add(this.shardGroup);
+
+          this.intactMesh = null;
+          this.basePositions = null;
+          this.fractureGroup = new THREE.Group();
+          this.root.add(this.fractureGroup);
+
+          // Bend roller-pivoted groups & halves
+          this.pivotL = new THREE.Group();
+          this.pivotR = new THREE.Group();
+          this.halfL = null;
+          this.halfR = null;
+          // Compression diagonal wedge halves
+          this.wedgeUpper = null;
+          this.wedgeLower = null;
+
+          this.currentBuiltMode = null;
+          this.buildSpecimenGeometry('bend');
+        }
+
+        applyTextures(diffTex, bumpTex) {
+          this.specMat.map = diffTex;
+          this.specMat.bumpMap = state.showLayers ? bumpTex : null;
+          this.specMat.bumpScale = 0.025 + ((state.layerHeight - 0.08) / 0.24) * 0.075;
+          this.specMat.needsUpdate = true;
+        }
+
+        spawnShards(origin, colorHex) {
+          this.shardMat.color.set(colorHex);
+          this.shards.forEach(s => {
+            s.mesh.visible = true;
+            s.mesh.position.set(
+              origin.x + (Math.random() - 0.5) * 0.4,
+              origin.y + (Math.random() - 0.5) * 0.3,
+              origin.z + (Math.random() - 0.5) * 1.4
+            );
+            s.mesh.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
+            s.vel.set(
+              (Math.random() - 0.5) * 0.14,
+              (Math.random() * 0.04) - 0.03,
+              (Math.random() - 0.5) * 0.14
+            );
+            s.rotVel.set(
+              (Math.random() - 0.5) * 0.25,
+              (Math.random() - 0.5) * 0.25,
+              (Math.random() - 0.5) * 0.25
+            );
+          });
+        }
+
+        hideShards() {
+          this.shards.forEach(s => { s.mesh.visible = false; });
+        }
+
+        stepShards() {
+          this.shards.forEach(s => {
+            if (!s.mesh.visible) return;
+            s.vel.y -= 0.008; // gravity
+            s.mesh.position.add(s.vel);
+            s.mesh.rotation.x += s.rotVel.x;
+            s.mesh.rotation.y += s.rotVel.y;
+            s.mesh.rotation.z += s.rotVel.z;
+            if (s.mesh.position.y < -2.0) {
+              s.mesh.position.y = -2.0;
+              s.vel.multiplyScalar(0.35);
+              s.vel.y = 0;
+            }
+          });
+        }
+
+        buildSpecimenGeometry(mode) {
+          if (this.currentBuiltMode === mode) return;
+          this.currentBuiltMode = mode;
+
+          if (this.intactMesh) {
+            this.root.remove(this.intactMesh);
+            this.intactMesh.geometry.dispose();
+            this.intactMesh = null;
+          }
+          // Dispose previous fracture meshes
+          this.fractureGroup.traverse(obj => {
+            if (obj.isMesh && obj.geometry) obj.geometry.dispose();
+          });
+          while (this.fractureGroup.children.length > 0) {
+            this.fractureGroup.remove(this.fractureGroup.children[0]);
+          }
+          this.pivotL = new THREE.Group();
+          this.pivotR = new THREE.Group();
+          this.halfL = null;
+          this.halfR = null;
+          this.wedgeUpper = null;
+          this.wedgeLower = null;
+
+          if (mode === 'compression') {
+            const geo = new THREE.BoxGeometry(3.0, 3.0, 3.0, 12, 16, 12);
+            initVertexColors(geo);
+            this.basePositions = new Float32Array(geo.attributes.position.array);
+            this.intactMesh = new THREE.Mesh(geo, this.specMat);
+            this.root.add(this.intactMesh);
+
+            // Vertical split halves (for upright/edge delamination)
+            const splitGeoL = new THREE.BoxGeometry(1.5, 3.0, 3.0, 6, 8, 6);
+            const splitGeoR = new THREE.BoxGeometry(1.5, 3.0, 3.0, 6, 8, 6);
+            initVertexColors(splitGeoL);
+            initVertexColors(splitGeoR);
+            this.halfL = new THREE.Mesh(splitGeoL, this.specMat);
+            this.halfR = new THREE.Mesh(splitGeoR, this.specMat);
+
+            // 45° Diagonal shear wedges (for flat / diag45 crushing)
+            this.wedgeUpper = new THREE.Mesh(createDiagonalWedgeGeometry(true), this.specMat);
+            this.wedgeLower = new THREE.Mesh(createDiagonalWedgeGeometry(false), this.specMat);
+
+            this.fractureGroup.add(this.halfL, this.halfR, this.wedgeUpper, this.wedgeLower);
+
+          } else if (mode === 'bend') {
+            const geo = new THREE.BoxGeometry(8.0, 1.0, 1.8, 48, 6, 8);
+            initVertexColors(geo);
+            this.basePositions = new Float32Array(geo.attributes.position.array);
+            this.intactMesh = new THREE.Mesh(geo, this.specMat);
+            this.root.add(this.intactMesh);
+
+            // Roller-pivoted halves: pivotL at (-3.4, -0.18), pivotR at (+3.4, -0.18)
+            // Half bar length = 4.0; relative to left roller (-3.4), center is at x = +1.4, y = +0.50
+            this.pivotL.position.set(-3.4, -0.18, 0);
+            this.pivotR.position.set(3.4, -0.18, 0);
+
+            const halfGeoL = new THREE.BoxGeometry(4.0, 1.0, 1.8, 12, 4, 6);
+            const halfGeoR = new THREE.BoxGeometry(4.0, 1.0, 1.8, 12, 4, 6);
+            initVertexColors(halfGeoL);
+            initVertexColors(halfGeoR);
+
+            this.halfL = new THREE.Mesh(halfGeoL, this.specMat);
+            this.halfL.position.set(1.4, 0.50, 0);
+            this.pivotL.add(this.halfL);
+
+            this.halfR = new THREE.Mesh(halfGeoR, this.specMat);
+            this.halfR.position.set(-1.4, 0.50, 0);
+            this.pivotR.add(this.halfR);
+
+            this.fractureGroup.add(this.pivotL, this.pivotR);
+
+          } else {
+            // SHEAR
+            const geo = new THREE.BoxGeometry(8.0, 1.0, 1.8, 48, 6, 8);
+            initVertexColors(geo);
+            this.basePositions = new Float32Array(geo.attributes.position.array);
+            this.intactMesh = new THREE.Mesh(geo, this.specMat);
+            this.root.add(this.intactMesh);
+
+            const halfGeoL = new THREE.BoxGeometry(4.0, 1.0, 1.8, 10, 4, 6);
+            const halfGeoR = new THREE.BoxGeometry(4.0, 1.0, 1.8, 10, 4, 6);
+            initVertexColors(halfGeoL);
+            initVertexColors(halfGeoR);
+            this.halfL = new THREE.Mesh(halfGeoL, this.specMat);
+            this.halfR = new THREE.Mesh(halfGeoR, this.specMat);
+            this.fractureGroup.add(this.halfL, this.halfR);
+          }
+
+          this.fractureGroup.visible = false;
+          this.hideShards();
+
+          this.bendRig.visible = (mode === 'bend');
+          this.compRig.visible = (mode === 'compression');
+          this.shearRig.visible = (mode === 'shear');
+        }
+
+        tintMesh(mesh, isFEA, baseColor, stressFn) {
+          const col = mesh.geometry.attributes.color;
+          const pos = mesh.geometry.attributes.position;
+          for (let i = 0; i < pos.count; i++) {
+            if (isFEA) {
+              const r = stressFn(pos.getX(i), pos.getY(i), pos.getZ(i));
+              const [cr, cg, cb] = getFEAColorRGB(r);
+              col.setXYZ(i, cr, cg, cb);
+            } else {
+              col.setXYZ(i, baseColor.r, baseColor.g, baseColor.b);
+            }
+          }
+          col.needsUpdate = true;
+        }
+
+        update(phys, animState) {
+          const mode = state.mode;
+          this.buildSpecimenGeometry(mode);
+
+          // Update realistic surface material finish per filament
+          this.specMat.roughness = state.viewMode === 'fea' ? 0.42 : phys.mat.roughness;
+          this.specMat.metalness = state.viewMode === 'fea' ? 0.08 : phys.mat.metalness;
+
+          const baseColor = new THREE.Color(phys.mat.color);
+          const isFEA = state.viewMode === 'fea';
+          const deform = computeVisualDeform(phys);
+          const isBrokenNow = phys.status === 'FRACTURED' || phys.status === 'DELAMINATED';
+
+          // Atomic state transition: capture EXACT pre-break deformation BEFORE rendering!
+          if (isBrokenNow && !animState.broken) {
+            animState.broken = true;
+            animState.progress = 0;
+            // Use the exact last intact pose if available, otherwise exact break-threshold deformation
+            animState.snap = {
+              defl: Math.max(animState.lastPose.defl, deform.defl),
+              crush: Math.max(animState.lastPose.crush, deform.crush),
+              slip: Math.max(animState.lastPose.slip, deform.slip),
+              orientation: state.orientation
+            };
+
+            if (phys.mat.behavior === 'brittle') {
+              const origin =
+                mode === 'bend' ? new THREE.Vector3(0, 0.32 - animState.snap.defl, 0) :
+                mode === 'compression' ? new THREE.Vector3(0, -1.5 + (3.0 - animState.snap.crush) * 0.5, 0) :
+                new THREE.Vector3(0, -animState.snap.slip, 0);
+              this.spawnShards(origin, isFEA ? '#f43f5e' : phys.mat.color);
+            } else {
+              this.hideShards();
+            }
+          } else if (!isBrokenNow && animState.broken) {
+            animState.broken = false;
+            animState.progress = 0;
+            animState.snap = null;
+            this.hideShards();
+          }
+
+          if (!animState.broken) {
+            // ================= INTACT CONTINUOUS DEFORMATION =================
+            this.intactMesh.visible = true;
+            this.fractureGroup.visible = false;
+
+            // Record exact visual pose every intact frame for zero-rebound handoff
+            animState.lastPose = { defl: deform.defl, crush: deform.crush, slip: deform.slip };
+
+            const pos = this.intactMesh.geometry.attributes.position;
+            const col = this.intactMesh.geometry.attributes.color;
+            const base = this.basePositions;
+            const count = pos.count;
+
+            if (mode === 'bend') {
+              this.intactMesh.position.set(0, 0.32, 0);
+              const defl = deform.defl;
+              const halfSpan = 3.4;
+              const endSlope = (defl * Math.PI) / (2 * halfSpan);
+
+              for (let i = 0; i < count; i++) {
+                const bx = base[i * 3];
+                const by = base[i * 3 + 1];
+                const bz = base[i * 3 + 2];
+                const ax = Math.abs(bx);
+                let dy;
+                if (ax <= halfSpan) {
+                  // Zero deflection at x = ±3.4 (resting cleanly on rollers), max -defl at x = 0
+                  dy = -defl * Math.cos((ax / halfSpan) * Math.PI * 0.5);
+                } else {
+                  // Overhang beyond support roller tilts slightly up tangent to the roller
+                  dy = endSlope * (ax - halfSpan);
+                }
+                pos.setXYZ(i, bx, by + dy, bz);
+
+                if (isFEA) {
+                  const u = Math.min(1, ax / halfSpan);
+                  const centerFactor = Math.pow(1 - u, 1.35);
+                  const fiberFactor = 0.45 + 0.55 * (Math.abs(by) / 0.5);
+                  const [r, g, b] = getFEAColorRGB(phys.stressRatio * centerFactor * fiberFactor);
+                  col.setXYZ(i, r, g, b);
+                } else {
+                  col.setXYZ(i, baseColor.r, baseColor.g, baseColor.b);
+                }
+              }
+              this.bendRam.position.set(0, 0.32 + 0.50 + 0.32 - defl, 0);
+
+            } else if (mode === 'compression') {
+              this.intactMesh.position.set(0, 0, 0);
+              const crush = deform.crush;
+              const newH = Math.max(1.2, 3.0 - crush);
+              const botY = -1.5;
+
+              for (let i = 0; i < count; i++) {
+                const bx = base[i * 3];
+                const by = base[i * 3 + 1];
+                const bz = base[i * 3 + 2];
+                const v = (by + 1.5) / 3.0;
+                const ny = botY + v * newH;
+                const bulge = 1 + Math.sin(v * Math.PI) * (crush * 0.14);
+                pos.setXYZ(i, bx * bulge, ny, bz * bulge);
+
+                if (isFEA) {
+                  const midFactor = 0.65 + 0.35 * Math.sin(v * Math.PI);
+                  const [r, g, b] = getFEAColorRGB(phys.stressRatio * midFactor);
+                  col.setXYZ(i, r, g, b);
+                } else {
+                  col.setXYZ(i, baseColor.r, baseColor.g, baseColor.b);
+                }
+              }
+              this.compRam.position.set(0, botY + newH, 0);
+
+            } else {
+              // SHEAR
+              this.intactMesh.position.set(0, 0, 0);
+              const slip = deform.slip;
+
+              for (let i = 0; i < count; i++) {
+                const bx = base[i * 3];
+                const by = base[i * 3 + 1];
+                const bz = base[i * 3 + 2];
+                const s = 0.5 * (1 + Math.tanh(bx * 3.4));
+                pos.setXYZ(i, bx, by - slip * s, bz);
+
+                if (isFEA) {
+                  const planeFactor = Math.exp(-Math.pow(bx * 1.15, 2));
+                  const [r, g, b] = getFEAColorRGB(phys.stressRatio * (0.2 + 0.85 * planeFactor));
+                  col.setXYZ(i, r, g, b);
+                } else {
+                  col.setXYZ(i, baseColor.r, baseColor.g, baseColor.b);
+                }
+              }
+              this.shearBlade.position.set(0, 0.5 - slip, 0);
+            }
+
+            pos.needsUpdate = true;
+            col.needsUpdate = true;
+            this.intactMesh.geometry.computeVertexNormals();
+
+          } else {
+            // ================= ZERO-REBOUND SEAMLESS FRACTURE =================
+            this.intactMesh.visible = false;
+            this.fractureGroup.visible = true;
+
+            // Smooth ease-out progression from t = 0 -> 1
+            const t = animState.progress;
+            const ease = 1 - Math.pow(1 - t, 3);
+            const snap = animState.snap || deform;
+
+            if (mode === 'bend') {
+              // Exact pre-break tilt angle around the rollers at x = ±3.4
+              const theta0 = Math.atan2(snap.defl, 3.4);
+              const extraTilt = phys.mat.behavior === 'brittle' ? 0.34 : 0.24;
+              const theta = theta0 + extraTilt * ease;
+
+              // Left half pivots clockwise (-theta) around left roller -> center drops FURTHER down
+              // Right half pivots counter-clockwise (+theta) around right roller -> center drops FURTHER down
+              this.pivotL.rotation.set(0, 0, -theta);
+              this.pivotR.rotation.set(0, 0, +theta);
+
+              // Subtle crack separation along each half's axis as it opens
+              const gap = 0.08 * ease;
+              this.halfL.position.set(1.4 - gap, 0.50, 0);
+              this.halfR.position.set(-1.4 + gap, 0.50, 0);
+
+              // Plunger descends monotonically from exact pre-break height
+              const currentCenterDrop = 3.4 * Math.sin(theta);
+              const ramY = 0.32 + 0.50 + 0.32 - Math.max(snap.defl, currentCenterDrop);
+              this.bendRam.position.set(0, ramY, 0);
+
+              // Color fracture halves
+              this.tintMesh(this.halfL, isFEA, baseColor, x => 0.25 + 0.75 * Math.max(0, (x + 2.0) / 4.0));
+              this.tintMesh(this.halfR, isFEA, baseColor, x => 0.25 + 0.75 * Math.max(0, 1 - (x + 2.0) / 4.0));
+
+            } else if (mode === 'compression') {
+              // Exact pre-break compressed scale & lateral barreling preserved at t = 0!
+              const newH0 = Math.max(1.2, 3.0 - snap.crush);
+              const sY0 = newH0 / 3.0;
+              const bulge0 = 1 + snap.crush * 0.10;
+              const botY = -1.5;
+
+              const verticalSplit = (snap.orientation === 'edge' || snap.orientation === 'upright');
+              this.halfL.visible = verticalSplit;
+              this.halfR.visible = verticalSplit;
+              this.wedgeUpper.visible = !verticalSplit;
+              this.wedgeLower.visible = !verticalSplit;
+
+              if (verticalSplit) {
+                // Vertical layer delamination split: continues compressing slightly & pushes halves apart
+                const sY = sY0 * (1 - 0.14 * ease);
+                const curH = 3.0 * sY;
+                const spread = 0.42 * ease;
+                const tilt = 0.14 * ease;
+
+                this.halfL.scale.set(bulge0, sY, bulge0);
+                this.halfR.scale.set(bulge0, sY, bulge0);
+                this.halfL.position.set(-0.75 * bulge0 - spread, botY + curH * 0.5, 0);
+                this.halfR.position.set(+0.75 * bulge0 + spread, botY + curH * 0.5, 0);
+                this.halfL.rotation.set(0, 0, +tilt);
+                this.halfR.rotation.set(0, 0, -tilt);
+
+                this.compRam.position.set(0, botY + curH, 0);
+
+                this.tintMesh(this.halfL, isFEA, baseColor, x => 0.4 + 0.6 * Math.max(0, (x + 0.75) / 1.5));
+                this.tintMesh(this.halfR, isFEA, baseColor, x => 0.4 + 0.6 * Math.max(0, 1 - (x + 0.75) / 1.5));
+              } else {
+                // 45° Diagonal shear-plane slip: at t=0 wedges form the EXACT compressed cube
+                const sY = sY0 * (1 - 0.06 * ease);
+                const curH = 3.0 * sY;
+                const slide = 0.52 * ease;
+
+                this.wedgeLower.scale.set(bulge0, sY, bulge0);
+                this.wedgeUpper.scale.set(bulge0, sY, bulge0);
+
+                // Lower wedge stays planted on bottom platen (slight opposite lateral shift)
+                this.wedgeLower.position.set(-slide * 0.25, botY + curH * 0.5, 0);
+                // Upper wedge slides smoothly DOWN & RIGHT along the 45° shear plane
+                this.wedgeUpper.position.set(+slide * 0.78, botY + curH * 0.5 - slide * 0.58, 0);
+
+                // Top platen follows upper wedge monotonically downward
+                this.compRam.position.set(0, botY + curH - slide * 0.58, 0);
+
+                this.tintMesh(this.wedgeUpper, isFEA, baseColor, (x, y) => 0.35 + 0.65 * Math.max(0, 1 - Math.abs(x + y) / 2.2));
+                this.tintMesh(this.wedgeLower, isFEA, baseColor, (x, y) => 0.35 + 0.65 * Math.max(0, 1 - Math.abs(x + y) / 2.2));
+              }
+
+            } else {
+              // SHEAR FRACTURE: Left half clamped at y=0, right half starts at -snap.slip and slides FURTHER down
+              const drop = snap.slip + 1.32 * ease;
+              this.halfL.position.set(-2.0, 0, 0);
+              this.halfL.rotation.set(0, 0, 0);
+              this.halfR.position.set(2.0 + 0.06 * ease, -drop, 0);
+              this.halfR.rotation.set(0, 0, -0.07 * ease);
+              this.shearBlade.position.set(0, 0.5 - drop, 0);
+
+              this.tintMesh(this.halfL, isFEA, baseColor, x => 0.2 + 0.8 * Math.max(0, (x + 2.0) / 4.0));
+              this.tintMesh(this.halfR, isFEA, baseColor, x => 0.2 + 0.8 * Math.max(0, 1 - (x + 2.0) / 4.0));
+            }
+
+            // Advance fracture progress & brittle shard physics AFTER applying current frame's pose
+            if (animState.progress < 1) {
+              animState.progress = Math.min(1, animState.progress + 0.055);
+            }
+            this.stepShards();
+          }
+        }
+      }
+
+      function initThreeJS() {
+        const container = document.getElementById('viewport-container');
+        const canvas = document.getElementById('three-canvas');
+
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x070a12);
+
+        const w = container.clientWidth || 800;
+        const h = container.clientHeight || 450;
+        camera = new THREE.PerspectiveCamera(38, w / h, 0.1, 120);
+
+        renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.setSize(w, h, false);
+
+        const ambient = new THREE.HemisphereLight(0xdbeafe, 0x0f172a, 0.75);
+        scene.add(ambient);
+
+        const keyLight = new THREE.DirectionalLight(0xffffff, 1.05);
+        keyLight.position.set(8, 14, 10);
+        scene.add(keyLight);
+
+        const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.55);
+        rimLight.position.set(-10, 6, -8);
+        scene.add(rimLight);
+
+        const fillLight = new THREE.DirectionalLight(0xf8fafc, 0.35);
+        fillLight.position.set(0, -6, 8);
+        scene.add(fillLight);
+
+        const grid = new THREE.GridHelper(34, 34, 0x1e293b, 0x111827);
+        grid.position.y = -2.08;
+        scene.add(grid);
+
+        rigA = new TestRigBay('A');
+        rigB = new TestRigBay('B');
+        rigB.root.visible = false;
+        scene.add(rigA.root, rigB.root);
+
+        rebuildLayerTextures();
+        resetCamera();
+
+        // Mouse Orbit & Scroll Zoom
+        container.addEventListener('mousedown', e => {
+          orbit.isDragging = true;
+          orbit.lastX = e.clientX;
+          orbit.lastY = e.clientY;
+        });
+        window.addEventListener('mouseup', () => { orbit.isDragging = false; });
+        window.addEventListener('mousemove', e => {
+          if (!orbit.isDragging) return;
+          const dx = e.clientX - orbit.lastX;
+          const dy = e.clientY - orbit.lastY;
+          orbit.lastX = e.clientX;
+          orbit.lastY = e.clientY;
+          orbit.theta -= dx * 0.008;
+          orbit.phi = Math.max(0.25, Math.min(Math.PI * 0.48, orbit.phi - dy * 0.008));
+          updateCameraPosition();
+        });
+
+        container.addEventListener('wheel', e => {
+          e.preventDefault();
+          orbit.radius = Math.max(7, Math.min(34, orbit.radius + e.deltaY * 0.012));
+          updateCameraPosition();
+        }, { passive: false });
+
+        // Touch Orbit & Pinch Zoom
+        container.addEventListener('touchstart', e => {
+          if (e.touches.length === 1) {
+            orbit.isDragging = true;
+            orbit.lastX = e.touches[0].clientX;
+            orbit.lastY = e.touches[0].clientY;
+          } else if (e.touches.length === 2) {
+            orbit.isDragging = false;
+            orbit.pinchDist = Math.hypot(
+              e.touches[0].clientX - e.touches[1].clientX,
+              e.touches[0].clientY - e.touches[1].clientY
+            );
+          }
+        }, { passive: true });
+
+        container.addEventListener('touchmove', e => {
+          if (e.touches.length === 1 && orbit.isDragging) {
+            e.preventDefault();
+            const dx = e.touches[0].clientX - orbit.lastX;
+            const dy = e.touches[0].clientY - orbit.lastY;
+            orbit.lastX = e.touches[0].clientX;
+            orbit.lastY = e.touches[0].clientY;
+            orbit.theta -= dx * 0.009;
+            orbit.phi = Math.max(0.25, Math.min(Math.PI * 0.48, orbit.phi - dy * 0.009));
+            updateCameraPosition();
+          } else if (e.touches.length === 2) {
+            e.preventDefault();
+            const dist = Math.hypot(
+              e.touches[0].clientX - e.touches[1].clientX,
+              e.touches[0].clientY - e.touches[1].clientY
+            );
+            const delta = orbit.pinchDist - dist;
+            orbit.pinchDist = dist;
+            orbit.radius = Math.max(7, Math.min(34, orbit.radius + delta * 0.04));
+            updateCameraPosition();
+          }
+        }, { passive: false });
+
+        container.addEventListener('touchend', () => { orbit.isDragging = false; });
+      }
+
+      function handleResize() {
+        const vp = document.getElementById('viewport-container');
+        if (renderer && camera && vp && vp.clientWidth > 0) {
+          camera.aspect = vp.clientWidth / vp.clientHeight;
+          camera.updateProjectionMatrix();
+          renderer.setSize(vp.clientWidth, vp.clientHeight, false);
+        }
+        const cw = document.getElementById('curve-wrap');
+        const cc = document.getElementById('curve-canvas');
+        if (cw && cc && cw.clientWidth > 0) {
+          const dpr = window.devicePixelRatio || 1;
+          cc.width = Math.floor(cw.clientWidth * dpr);
+          cc.height = Math.floor(cw.clientHeight * dpr);
+          cc.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+      }
+
+      /* =========================================================================
+         5. LIVE 2D STRESS–STRAIN CURVE
+         ========================================================================= */
+      function drawStressStrain(physA, physB) {
+        if (!state.drawerOpen) return;
+        const wrap = document.getElementById('curve-wrap');
+        const canvas = document.getElementById('curve-canvas');
+        const ctx = canvas.getContext('2d');
+        const w = wrap.clientWidth, h = wrap.clientHeight;
+        if (w <= 0 || h <= 0) return;
+
+        ctx.clearRect(0, 0, w, h);
+        const pad = { top: 14, right: 16, bottom: 26, left: 42 };
+        const pw = w - pad.left - pad.right;
+        const ph = h - pad.top - pad.bottom;
+
+        const maxStress = Math.max(physA.ultimateStress, physB ? physB.ultimateStress : 0, 30) * 1.18;
+        const maxStrain = Math.max(physA.effElongation, physB ? physB.effElongation : 0, 6) * 1.12;
+
+        ctx.strokeStyle = 'rgba(51, 65, 85, 0.42)';
+        ctx.lineWidth = 1;
+        ctx.font = '500 9px "JetBrains Mono", monospace';
+        ctx.fillStyle = '#64748b';
+
+        for (let i = 0; i <= 3; i++) {
+          const y = pad.top + (ph * i) / 3;
+          ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(w - pad.right, y); ctx.stroke();
+          ctx.textAlign = 'right';
+          ctx.fillText(Math.round(maxStress * (1 - i / 3)), pad.left - 6, y + 3);
+        }
+        for (let i = 0; i <= 4; i++) {
+          const x = pad.left + (pw * i) / 4;
+          ctx.beginPath(); ctx.moveTo(x, pad.top); ctx.lineTo(x, pad.top + ph); ctx.stroke();
+          ctx.textAlign = 'center';
+          const v = maxStrain * (i / 4);
+          ctx.fillText(`${v < 10 ? v.toFixed(1) : Math.round(v)}%`, x, h - 10);
+        }
+
+        const plotOne = (phys, strokeCol) => {
+          const ult = phys.ultimateStress;
+          const eBreak = phys.effElongation;
+          const eYield = Math.min(eBreak * 0.72, (ult / phys.effModulus) * 100);
+          const sYield = ult * (phys.mat.behavior === 'brittle' ? 0.88 : 0.78);
+
+          const toX = s => pad.left + (Math.min(maxStrain, s) / maxStrain) * pw;
+          const toY = st => pad.top + ph - (Math.min(maxStress, st) / maxStress) * ph;
+
+          const pts = [];
+          for (let i = 0; i <= 36; i++) {
+            const s = (eBreak * i) / 36;
+            let st;
+            if (s <= eYield) st = (s / Math.max(0.001, eYield)) * sYield;
+            else {
+              const u = (s - eYield) / Math.max(0.001, eBreak - eYield);
+              st = sYield + (ult - sYield) * Math.sin(u * Math.PI * 0.5);
+            }
+            pts.push({ x: toX(s), y: toY(st), st });
+          }
+
+          ctx.save();
+          ctx.strokeStyle = strokeCol;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          pts.forEach((p, idx) => idx === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+          ctx.stroke();
+
+          // Yield point ring
+          ctx.beginPath();
+          ctx.arc(toX(eYield), toY(sYield), 2.5, 0, Math.PI * 2);
+          ctx.fillStyle = '#fbbf24';
+          ctx.fill();
+
+          // Fracture X marker
+          const end = pts[pts.length - 1];
+          ctx.strokeStyle = '#fb7185';
+          ctx.lineWidth = 1.8;
+          ctx.beginPath();
+          ctx.moveTo(end.x - 3.5, end.y - 3.5); ctx.lineTo(end.x + 3.5, end.y + 3.5);
+          ctx.moveTo(end.x + 3.5, end.y - 3.5); ctx.lineTo(end.x - 3.5, end.y + 3.5);
+          ctx.stroke();
+
+          // Live Operating Point Dot
+          const broken = phys.status === 'FRACTURED' || phys.status === 'DELAMINATED';
+          let op = pts[0];
+          if (broken) op = end;
+          else {
+            for (const p of pts) {
+              if (p.st <= phys.stress) op = p;
+              else break;
+            }
+          }
+
+          ctx.beginPath();
+          ctx.arc(op.x, op.y, 4.2, 0, Math.PI * 2);
+          ctx.fillStyle = broken ? '#f43f5e' : strokeCol;
+          ctx.fill();
+          ctx.strokeStyle = '#070a12';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+          ctx.restore();
+        };
+
+        plotOne(physA, '#38bdf8');
+        if (physB) plotOne(physB, '#fbbf24');
+      }
+
+      /* =========================================================================
+         6. HUD TELEMETRY, SIDEBAR BADGES & DYNAMIC FORCE RANGE
+         ========================================================================= */
+      function syncDynamicForceRange(physA, physB) {
+        const peakBreak = Math.max(physA.breakForce, physB ? physB.breakForce : 0, 200);
+        const stepUnit = peakBreak > 5000 ? 500 : 100;
+        const newMax = Math.ceil((peakBreak * 1.35) / stepUnit) * stepUnit;
+        if (newMax !== state.maxForce) {
+          state.maxForce = newMax;
+          const slider = document.getElementById('slider-force');
+          slider.max = newMax;
+          slider.step = newMax > 10000 ? 50 : newMax > 2000 ? 10 : 5;
+          document.getElementById('force-max-label').textContent = `${newMax.toLocaleString()} N`;
+          if (state.force > newMax) {
+            state.force = newMax;
+            slider.value = newMax;
+            document.getElementById('input-force').value = Math.round(newMax);
+          }
+        }
+      }
+
+      function updateMaterialBadges() {
+        const renderBadges = (mat, swatchId, catId, badgeWrapId) => {
+          document.getElementById(swatchId).style.background = mat.color;
+          document.getElementById(catId).textContent = `${mat.category} · ${mat.temp}°C`;
+          const behLabel = mat.behavior === 'brittle' ? 'Brittle' : mat.behavior === 'elastomer' ? 'Elastomer' : 'Ductile';
+          document.getElementById(badgeWrapId).innerHTML = `
+            <span class="px-1.5 py-0.5 rounded bg-studio-950 border border-slate-800 text-slate-300">Flex ${mat.flexural} MPa</span>
+            <span class="px-1.5 py-0.5 rounded bg-studio-950 border border-slate-800 text-slate-300">E ${(mat.modulus / 1000).toFixed(2)} GPa</span>
+            <span class="px-1.5 py-0.5 rounded bg-studio-950 border border-slate-800 text-slate-300">${behLabel}</span>
+          `;
+        };
+        renderBadges(FILAMENT_MAP[state.matA], 'swatch-a', 'cat-a-badge', 'badges-a');
+        renderBadges(FILAMENT_MAP[state.matB], 'swatch-b', 'cat-b-badge', 'badges-b');
+      }
+
+      function renderHudCard(phys, tag, accent) {
+        const sf = !isFinite(phys.safetyFactor) ? '∞' : phys.safetyFactor.toFixed(2) + '×';
+        const badgeCls =
+          (phys.status === 'FRACTURED' || phys.status === 'DELAMINATED') ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' :
+          phys.status === 'YIELDING' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
+          'bg-emerald-500/15 text-emerald-300 border-emerald-500/35';
+
+        return `
+          <div class="bg-studio-900/85 backdrop-blur-md border border-slate-800/90 rounded-xl px-3 py-2 shadow-xl min-w-[220px]">
+            <div class="flex items-center justify-between gap-2 mb-1.5">
+              <span class="text-[11px] font-bold ${accent} truncate flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full shrink-0" style="background:${phys.mat.color}"></span>
+                <span>${tag}: ${phys.mat.name}</span>
+              </span>
+              <span class="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded border ${badgeCls}">${phys.status}</span>
+            </div>
+            <div class="grid grid-cols-3 gap-x-3 gap-y-1 font-mono text-[10px]">
+              <div><span class="text-slate-500 block">BREAK</span><span class="text-sky-300 font-semibold">${Math.round(phys.breakForce).toLocaleString()} N</span></div>
+              <div><span class="text-slate-500 block">STRESS</span><span class="text-slate-100 font-semibold">${phys.stress.toFixed(1)} MPa</span></div>
+              <div><span class="text-slate-500 block">SAFETY</span><span class="${phys.safetyFactor < 1 ? 'text-rose-400' : 'text-emerald-400'} font-semibold">${sf}</span></div>
+              <div><span class="text-slate-500 block">FORCE</span><span class="text-slate-200">${Math.round(state.force).toLocaleString()} N</span></div>
+              <div><span class="text-slate-500 block">DEFL</span><span class="text-slate-200">${phys.deflection.toFixed(2)} mm</span></div>
+              <div><span class="text-slate-500 block">STRAIN</span><span class="text-slate-200">${phys.strainPct.toFixed(1)}%</span></div>
+            </div>
+          </div>
+        `;
+      }
+
+      function buildFailureAnalysisText(physA, physB) {
+        const lh = state.layerHeight.toFixed(2);
+        const describeOne = p => {
+          if (p.status === 'DELAMINATED') {
+            return `${p.mat.name} delaminated cleanly along the ${state.orientation === 'upright' ? 'Z-axis layer seam' : 'vertical perimeter layers'} at ${lh} mm layer height (Z-bond ${Math.round(p.mat.zAdhesion * 100)}%).`;
+          }
+          if (p.status === 'FRACTURED') {
+            if (state.mode === 'compression') return `${p.mat.name} failed via compressive ${p.mat.behavior === 'brittle' ? '45° diagonal shear crushing' : 'barreling & shear-plane collapse'} at ${Math.round(p.breakForce).toLocaleString()} N.`;
+            if (state.mode === 'shear') return `${p.mat.name} sheared off along the blade plane (${p.mat.behavior === 'brittle' ? 'brittle cleavage' : 'ductile tearing'}) at ${Math.round(p.breakForce).toLocaleString()} N.`;
+            return `${p.mat.name} snapped in 3-point bending (${p.mat.behavior === 'brittle' ? 'brittle tensile fracture' : 'ductile flexural rupture'}) at ${Math.round(p.breakForce).toLocaleString()} N.`;
+          }
+          if (p.status === 'YIELDING') {
+            return `${p.mat.name} is yielding plastically (${Math.round(p.stressRatio * 100)}% of ${p.ultimateStress.toFixed(1)} MPa ultimate capacity).`;
+          }
+          return `${p.mat.name} is intact (${p.layerCount} layers @ ${lh} mm). Predicted break at ${Math.round(p.breakForce).toLocaleString()} N.`;
+        };
+        return physB ? `${describeOne(physA)} | ${describeOne(physB)}` : describeOne(physA);
+      }
+
+      function updateUIReadouts(physA, physB) {
+        document.getElementById('hud-telemetry').innerHTML = physB
+          ? renderHudCard(physA, 'A', 'text-sky-300') + renderHudCard(physB, 'B', 'text-amber-300')
+          : renderHudCard(physA, 'A', 'text-sky-300');
+
+        document.getElementById('failure-readout').textContent = buildFailureAnalysisText(physA, physB);
+        document.getElementById('specimen-dims-tag').textContent = state.mode === 'compression' ? '24×24×24 mm Cube' : '80×16×8 mm Bar';
+        document.getElementById('eff-mod-tag').textContent = `Eff. E: ${(physA.effModulus / 1000).toFixed(2)} GPa`;
+        document.getElementById('layer-count-readout').textContent = `${physA.layerCount} layers`;
+        document.getElementById('layer-factor-readout').textContent = `Bond factor: ${Math.round(physA.layerFactor * 100)}%`;
+
+        document.getElementById('drawer-curve-legend').innerHTML =
+          `<span class="inline-flex items-center gap-1 text-sky-300"><span class="w-2.5 h-0.5 bg-sky-400"></span>${physA.mat.name}</span>` +
+          (physB ? `<span class="inline-flex items-center gap-1 text-amber-300"><span class="w-2.5 h-0.5 bg-amber-400"></span>${physB.mat.name}</span>` : '');
+      }
+
+      /* =========================================================================
+         7. SORTABLE & FILTERABLE MATERIAL MATRIX (16 FILAMENTS)
+         ========================================================================= */
+      function renderMatrix() {
+        const modeLabel = state.mode === 'bend' ? '3-Pt Bend' : state.mode === 'compression' ? 'Compression' : 'Shear';
+        const orientLabel = { flat: 'Flat XY', edge: 'On-Edge XZ', upright: 'Upright Z', diag45: '45° Diag' }[state.orientation];
+        document.getElementById('matrix-settings-pill').textContent =
+          `${modeLabel} · ${orientLabel} · ${state.layerHeight.toFixed(2)}mm · ${state.infill}%`;
+
+        let rows = FILAMENTS.map(f => ({
+          ...f,
+          breakForce: computePhysics(f.id, 0, state.mode, state.orientation, state.layerHeight, state.infill).breakForce
+        }));
+
+        if (state.matrixCategory !== 'All') {
+          rows = rows.filter(r => r.category === state.matrixCategory);
+        }
+        if (state.matrixSearch.trim()) {
+          const q = state.matrixSearch.trim().toLowerCase();
+          rows = rows.filter(r => r.name.toLowerCase().includes(q) || r.category.toLowerCase().includes(q));
+        }
+
+        rows.sort((a, b) => {
+          const dir = state.sortDir === 'asc' ? 1 : -1;
+          if (state.sortCol === 'name' || state.sortCol === 'category') {
+            return a[state.sortCol].localeCompare(b[state.sortCol]) * dir;
+          }
+          return (a[state.sortCol] - b[state.sortCol]) * dir;
+        });
+
+        const maxBreak = Math.max(...rows.map(r => r.breakForce), 100);
+        const catColor = {
+          Standard: 'bg-sky-500/10 text-sky-300 border-sky-500/30',
+          Flexible: 'bg-pink-500/10 text-pink-300 border-pink-500/30',
+          Engineering: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30',
+          'High-Temp': 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+        };
+
+        const tbody = document.getElementById('matrix-tbody');
+        tbody.innerHTML = rows.map(r => `
+          <tr class="hover:bg-studio-850/70 transition-colors">
+            <td class="py-3 px-4 font-semibold text-white">
+              <div class="flex items-center gap-2.5">
+                <span class="w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-white/20" style="background:${r.color}"></span>
+                <span>${r.name}</span>
+              </div>
+            </td>
+            <td class="py-3 px-3">
+              <span class="text-[10px] font-mono px-2 py-0.5 rounded-full border ${catColor[r.category]}">${r.category}</span>
+            </td>
+            <td class="py-3 px-3 font-mono text-slate-300">${r.flexural}</td>
+            <td class="py-3 px-3 font-mono text-slate-300">${r.compressive}</td>
+            <td class="py-3 px-3 font-mono text-slate-300">${r.shear}</td>
+            <td class="py-3 px-3 font-mono text-slate-300">${(r.modulus / 1000).toFixed(2)}</td>
+            <td class="py-3 px-3 font-mono text-slate-300">${Math.round(r.zAdhesion * 100)}%</td>
+            <td class="py-3 px-3 font-mono font-bold text-sky-300">
+              ${Math.round(r.breakForce).toLocaleString()} N
+              <div class="w-24 h-1 bg-slate-800 rounded-full overflow-hidden mt-1">
+                <div class="h-full bg-sky-400 rounded-full" style="width:${Math.min(100, (r.breakForce / maxBreak) * 100)}%"></div>
+              </div>
+            </td>
+            <td class="py-3 px-4 text-right">
+              <div class="inline-flex items-center gap-1.5">
+                <button type="button" data-load-a="${r.id}" class="btn-load-a px-2.5 py-1 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/35 text-sky-300 text-xs font-semibold transition-colors">
+                  Load A
+                </button>
+                <button type="button" data-load-b="${r.id}" class="btn-load-b px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/35 text-amber-300 text-xs font-semibold transition-colors">
+                  Load B
+                </button>
+              </div>
+            </td>
+          </tr>
+        `).join('');
+
+        tbody.querySelectorAll('.btn-load-a').forEach(btn => {
+          btn.addEventListener('click', () => {
+            selectMaterial('A', btn.dataset.loadA, true);
+            switchTab('lab');
+          });
+        });
+        tbody.querySelectorAll('.btn-load-b').forEach(btn => {
+          btn.addEventListener('click', () => {
+            if (!state.compare) {
+              state.compare = true;
+              syncControlStyles();
+              resetCamera();
+            }
+            selectMaterial('B', btn.dataset.loadB, true);
+            switchTab('lab');
+          });
+        });
+
+        document.querySelectorAll('th[data-sort]').forEach(th => {
+          const ind = th.querySelector('.sort-ind');
+          ind.textContent = th.dataset.sort === state.sortCol ? (state.sortDir === 'asc' ? '▲' : '▼') : '';
+        });
+
+        document.querySelectorAll('.cat-pill').forEach(btn => {
+          const active = btn.dataset.cat === state.matrixCategory;
+          btn.className = `cat-pill px-3 py-1 rounded-lg text-xs font-semibold border transition-all ${
+            active ? 'bg-sky-500/15 text-sky-300 border-sky-500/40' : 'bg-studio-950 text-slate-400 border-slate-800 hover:text-slate-200'
+          }`;
+        });
+      }
+
+      /* =========================================================================
+         8. MAIN ANIMATION LOOP
+         ========================================================================= */
+      function animate() {
+        requestAnimationFrame(animate);
+        if (state.activeTab !== 'lab' || !renderer) return;
+
+        const physA = computePhysics(state.matA, state.force, state.mode, state.orientation, state.layerHeight, state.infill);
+        const physB = state.compare ? computePhysics(state.matB, state.force, state.mode, state.orientation, state.layerHeight, state.infill) : null;
+
+        syncDynamicForceRange(physA, physB);
+
+        if (state.ramping) {
+          const doneA = physA.status === 'FRACTURED' || physA.status === 'DELAMINATED';
+          const doneB = !physB || physB.status === 'FRACTURED' || physB.status === 'DELAMINATED';
+          if ((doneA && doneB) || state.force >= state.maxForce) {
+            stopRamp();
+          } else {
+            const target = Math.max(physA.breakForce, physB ? physB.breakForce : 0);
+            const step = Math.max(4, target / 85);
+            state.force = Math.min(state.maxForce, state.force + step);
+            document.getElementById('slider-force').value = Math.round(state.force);
+            document.getElementById('input-force').value = Math.round(state.force);
+          }
+        }
+
+        if (state.compare && physB) {
+          rigA.root.position.x = -5.2;
+          rigB.root.position.x = 5.2;
+          rigB.root.visible = true;
+          rigA.update(physA, state.anim.A);
+          rigB.update(physB, state.anim.B);
+        } else {
+          rigA.root.position.x = 0;
+          rigB.root.visible = false;
+          rigA.update(physA, state.anim.A);
+        }
+
+        renderer.render(scene, camera);
+        updateUIReadouts(physA, physB);
+        drawStressStrain(physA, physB);
+      }
+
+      /* =========================================================================
+         9. ROCK-SOLID FILAMENT SELECTION & UI EVENTS
+         ========================================================================= */
+      function selectMaterial(slot, matId, shouldResetForce = false) {
+        if (!FILAMENT_MAP[matId]) return;
+        if (slot === 'A') {
+          state.matA = matId;
+          document.getElementById('sel-mat-a').value = matId;
+        } else {
+          state.matB = matId;
+          document.getElementById('sel-mat-b').value = matId;
+        }
+
+        if (shouldResetForce) {
+          resetSim(false);
+        } else {
+          // Cleanly re-evaluate fracture state for the newly chosen filament against current force
+          const phys = computePhysics(matId, state.force, state.mode, state.orientation, state.layerHeight, state.infill);
+          const anim = state.anim[slot];
+          if (phys.stressRatio < 1.0) {
+            anim.broken = false;
+            anim.progress = 0;
+            anim.snap = null;
+          } else {
+            // If still above break force, snap cleanly to broken pose without upward jump
+            anim.broken = false;
+            anim.lastPose = computeVisualDeform(phys);
+          }
+        }
+        updateMaterialBadges();
+      }
+
+      function stopRamp() {
+        state.ramping = false;
+        document.getElementById('btn-ramp-text').textContent = 'Ramp to Break';
+        document.getElementById('ramp-icon-play').classList.remove('hidden');
+        document.getElementById('ramp-icon-pause').classList.add('hidden');
+      }
+
+      function resetSim(keepForce = false) {
+        stopRamp();
+        if (!keepForce) {
+          state.force = 0;
+          document.getElementById('slider-force').value = 0;
+          document.getElementById('input-force').value = 0;
+        }
+        state.anim.A = { broken: false, progress: 0, snap: null, lastPose: { defl: 0, crush: 0, slip: 0 } };
+        state.anim.B = { broken: false, progress: 0, snap: null, lastPose: { defl: 0, crush: 0, slip: 0 } };
+      }
+
+      function populateFilamentDropdown(selectEl, initialId) {
+        selectEl.innerHTML = '';
+        CATEGORIES.forEach(cat => {
+          const group = document.createElement('optgroup');
+          group.label = cat;
+          FILAMENTS.filter(f => f.category === cat).forEach(f => {
+            const opt = document.createElement('option');
+            opt.value = f.id;
+            opt.textContent = f.name;
+            group.appendChild(opt);
+          });
+          selectEl.appendChild(group);
+        });
+        selectEl.value = initialId;
+      }
+
+      function syncControlStyles() {
+        document.querySelectorAll('.mode-btn').forEach(b => {
+          const active = b.dataset.mode === state.mode;
+          b.className = `mode-btn py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            active ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40' : 'text-slate-400 hover:text-slate-200 border border-transparent'
+          }`;
+        });
+
+        document.querySelectorAll('.orient-btn').forEach(b => {
+          const active = b.dataset.orient === state.orientation;
+          b.className = `orient-btn px-2.5 py-2 rounded-xl border text-xs font-medium flex items-center gap-2 transition-all ${
+            active ? 'bg-sky-500/15 border-sky-400/60 text-sky-300' : 'bg-studio-950 border-slate-800 text-slate-300 hover:border-slate-700'
+          }`;
+        });
+
+        document.querySelectorAll('.lh-chip').forEach(b => {
+          const active = Math.abs(parseFloat(b.dataset.lh) - state.layerHeight) < 0.005;
+          b.className = `lh-chip py-1 rounded-md font-mono text-[10px] border transition-colors ${
+            active ? 'bg-sky-500/20 border-sky-400/60 text-sky-300 font-bold' : 'bg-studio-950 border-slate-800 text-slate-400 hover:text-slate-200'
+          }`;
+        });
+
+        document.getElementById('layer-val').textContent = `${state.layerHeight.toFixed(2)} mm`;
+        document.getElementById('infill-val').textContent = `${state.infill}%`;
+
+        const cmpBtn = document.getElementById('btn-compare-header');
+        const cmpDot = document.getElementById('compare-dot');
+        cmpBtn.className = `px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-all ${
+          state.compare ? 'bg-amber-500/15 border-amber-400/50 text-amber-300' : 'bg-studio-850 border-slate-700/80 text-slate-300 hover:border-slate-600'
+        }`;
+        cmpDot.className = `w-2 h-2 rounded-full transition-colors ${state.compare ? 'bg-amber-400' : 'bg-slate-500'}`;
+        document.getElementById('wrap-mat-b').classList.toggle('hidden', !state.compare);
+
+        const bFea = document.getElementById('btn-view-fea');
+        const bReal = document.getElementById('btn-view-real');
+        bFea.className = `px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${
+          state.viewMode === 'fea' ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30' : 'text-slate-400 hover:text-slate-200 border border-transparent'
+        }`;
+        bReal.className = `px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${
+          state.viewMode === 'real' ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30' : 'text-slate-400 hover:text-slate-200 border border-transparent'
+        }`;
+        document.getElementById('fea-legend-bar').classList.toggle('hidden', state.viewMode !== 'fea');
+
+        const bLay = document.getElementById('btn-toggle-layers');
+        bLay.className = `px-2 py-1.5 rounded-lg text-[11px] font-semibold transition-all border ${
+          state.showLayers ? 'bg-studio-800 text-sky-300 border-slate-700' : 'bg-transparent text-slate-500 border-transparent hover:text-slate-300'
+        }`;
+      }
+
+      function switchTab(tab) {
+        state.activeTab = tab;
+        const lab = document.getElementById('view-lab');
+        const mat = document.getElementById('view-matrix');
+        const tLab = document.getElementById('tab-lab');
+        const tMat = document.getElementById('tab-matrix');
+
+        if (tab === 'lab') {
+          lab.classList.remove('hidden');
+          mat.classList.add('hidden');
+          tLab.className = 'px-3 sm:px-4 py-1.5 rounded-lg text-xs font-semibold transition-all bg-sky-500/15 text-sky-300 border border-sky-500/30';
+          tMat.className = 'px-3 sm:px-4 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-400 hover:text-slate-200 border border-transparent';
+          setTimeout(handleResize, 20);
+        } else {
+          stopRamp();
+          lab.classList.add('hidden');
+          mat.classList.remove('hidden');
+          tMat.className = 'px-3 sm:px-4 py-1.5 rounded-lg text-xs font-semibold transition-all bg-sky-500/15 text-sky-300 border border-sky-500/30';
+          tLab.className = 'px-3 sm:px-4 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-400 hover:text-slate-200 border border-transparent';
+          renderMatrix();
+        }
+      }
+
+      function bindEvents() {
+        const selA = document.getElementById('sel-mat-a');
+        const selB = document.getElementById('sel-mat-b');
+
+        populateFilamentDropdown(selA, state.matA);
+        populateFilamentDropdown(selB, state.matB);
+        updateMaterialBadges();
+
+        selA.addEventListener('change', e => selectMaterial('A', e.target.value, false));
+        selB.addEventListener('change', e => selectMaterial('B', e.target.value, false));
+
+        document.getElementById('tab-lab').addEventListener('click', () => switchTab('lab'));
+        document.getElementById('tab-matrix').addEventListener('click', () => switchTab('matrix'));
+        document.getElementById('btn-compare-header').addEventListener('click', () => {
+          state.compare = !state.compare;
+          state.anim.B.broken = false;
+          state.anim.B.progress = 0;
+          syncControlStyles();
+          resetCamera();
+        });
+
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            state.mode = btn.dataset.mode;
+            syncControlStyles();
+            resetSim(false);
+          });
+        });
+
+        document.querySelectorAll('.orient-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            state.orientation = btn.dataset.orient;
+            syncControlStyles();
+            rebuildLayerTextures();
+            resetSim(true);
+          });
+        });
+
+        const setLayerHeight = val => {
+          state.layerHeight = Math.max(0.08, Math.min(0.32, parseFloat(val)));
+          document.getElementById('slider-layer').value = state.layerHeight.toFixed(2);
+          syncControlStyles();
+          rebuildLayerTextures();
+        };
+        document.getElementById('slider-layer').addEventListener('input', e => setLayerHeight(e.target.value));
+        document.querySelectorAll('.lh-chip').forEach(btn => {
+          btn.addEventListener('click', () => setLayerHeight(btn.dataset.lh));
+        });
+
+        document.getElementById('slider-infill').addEventListener('input', e => {
+          state.infill = parseInt(e.target.value, 10);
+          syncControlStyles();
+        });
+
+        document.getElementById('slider-force').addEventListener('input', e => {
+          stopRamp();
+          state.force = parseFloat(e.target.value) || 0;
+          document.getElementById('input-force').value = Math.round(state.force);
+        });
+        document.getElementById('input-force').addEventListener('input', e => {
+          stopRamp();
+          const val = Math.max(0, Math.min(state.maxForce, parseFloat(e.target.value) || 0));
+          state.force = val;
+          document.getElementById('slider-force').value = val;
+        });
+
+        document.getElementById('btn-ramp').addEventListener('click', () => {
+          if (state.ramping) { stopRamp(); return; }
+          const pA = computePhysics(state.matA, state.force, state.mode, state.orientation, state.layerHeight, state.infill);
+          const pB = state.compare ? computePhysics(state.matB, state.force, state.mode, state.orientation, state.layerHeight, state.infill) : null;
+          const allBroken = (pA.status === 'FRACTURED' || pA.status === 'DELAMINATED') && (!pB || pB.status === 'FRACTURED' || pB.status === 'DELAMINATED');
+          if (allBroken || state.force >= state.maxForce) resetSim(false);
+          state.ramping = true;
+          document.getElementById('btn-ramp-text').textContent = 'Pause Ramp';
+          document.getElementById('ramp-icon-play').classList.add('hidden');
+          document.getElementById('ramp-icon-pause').classList.remove('hidden');
+        });
+        document.getElementById('btn-reset').addEventListener('click', () => resetSim(false));
+
+        document.getElementById('btn-view-fea').addEventListener('click', () => { state.viewMode = 'fea'; syncControlStyles(); });
+        document.getElementById('btn-view-real').addEventListener('click', () => { state.viewMode = 'real'; syncControlStyles(); });
+        document.getElementById('btn-toggle-layers').addEventListener('click', () => {
+          state.showLayers = !state.showLayers;
+          syncControlStyles();
+          rebuildLayerTextures();
+        });
+        document.getElementById('btn-reset-cam').addEventListener('click', resetCamera);
+
+        document.getElementById('btn-toggle-drawer').addEventListener('click', () => {
+          state.drawerOpen = !state.drawerOpen;
+          document.getElementById('drawer-body').classList.toggle('hidden', !state.drawerOpen);
+          document.getElementById('drawer-chevron').style.transform = state.drawerOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+          setTimeout(handleResize, 20);
+        });
+
+        document.getElementById('matrix-search').addEventListener('input', e => {
+          state.matrixSearch = e.target.value;
+          renderMatrix();
+        });
+        document.querySelectorAll('.cat-pill').forEach(btn => {
+          btn.addEventListener('click', () => {
+            state.matrixCategory = btn.dataset.cat;
+            renderMatrix();
+          });
+        });
+        document.querySelectorAll('th[data-sort]').forEach(th => {
+          th.addEventListener('click', () => {
+            const col = th.dataset.sort;
+            if (state.sortCol === col) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+            else { state.sortCol = col; state.sortDir = (col === 'name' || col === 'category') ? 'asc' : 'desc'; }
+            renderMatrix();
+          });
+        });
+
+        window.addEventListener('resize', handleResize);
+      }
+
+      function bootstrap() {
+        bindEvents();
+        syncControlStyles();
+        initThreeJS();
+        handleResize();
+        animate();
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bootstrap);
+      } else {
+        bootstrap();
+      }
+    })();
+  </script>
+</body>
+</html>
