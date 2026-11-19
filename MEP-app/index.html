@@ -1,1747 +1,979 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DuctSim — MEP & HVAC Duct CFM Simulator</title>
+  <title>DuctCAD 3D — HVAC Duct CFM &amp; Plumbing MEP Planner</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+        },
+      },
+    };
+  </script>
   <style>
-    * { box-sizing: border-box; user-select: none; }
-    body { font-family: 'Inter', sans-serif; background: #0b1120; color: #e2e8f0; overflow: hidden; }
-    .mono { font-family: 'JetBrains Mono', monospace; }
-    canvas { display: block; touch-action: none; }
-    /* Custom scrollbar for inspector */
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #0b1120;
+      color: #e2e8f0;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    input, select, textarea {
+      user-select: text;
+      -webkit-user-select: text;
+    }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: #0f172a; }
-    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 999px; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
     ::-webkit-scrollbar-thumb:hover { background: #475569; }
-    .tool-btn.active {
-      background: #0284c7;
-      color: #ffffff;
-      border-color: #38bdf8;
-      box-shadow: 0 0 12px rgba(2, 132, 199, 0.45);
+    canvas {
+      display: block;
+      touch-action: none;
     }
   </style>
 </head>
-<body class="h-screen w-screen flex flex-col">
+<body class="h-screen w-screen flex flex-col bg-slate-950 text-slate-100 overflow-hidden">
 
-  <!-- TOP COMPACT TOOLBAR -->
-  <header class="bg-slate-900/95 border-b border-slate-800 px-3 py-2 flex items-center justify-between gap-2 z-20 shrink-0">
-    <!-- Brand -->
-    <div class="flex items-center gap-2.5 shrink-0">
-      <div class="w-8 h-8 rounded-lg bg-sky-600/20 border border-sky-500/40 flex items-center justify-center text-sky-400 font-bold text-sm">
-        DS
+  <!-- ==================== TOP HEADER & GLOBAL CONTROLS ==================== -->
+  <header class="bg-slate-900/95 border-b border-slate-800 px-3 py-2 flex flex-wrap items-center justify-between gap-2 z-30 shrink-0">
+    <!-- Brand & 2D/3D Switcher -->
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-lg bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-400 shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-sm font-bold tracking-tight text-white leading-tight">DuctCAD <span class="text-sky-400 font-mono font-semibold">3D MEP</span></h1>
+          <p class="text-[11px] text-slate-400 leading-tight hidden lg:block">HVAC Duct CFM &amp; Plumbing Planner</p>
+        </div>
       </div>
-      <div class="hidden sm:block">
-        <div class="text-sm font-semibold tracking-tight text-white leading-none">DuctSim</div>
-        <div class="text-[10px] text-slate-400 mono mt-0.5">0.5ft SNAP • 10ft CEILING</div>
+
+      <!-- 2D / 3D Mode Toggle -->
+      <div class="flex items-center bg-slate-950 border border-indigo-500/40 rounded-lg p-0.5 shadow-inner">
+        <button id="btnView2D" class="px-3 py-1 rounded-md text-xs font-semibold transition bg-indigo-600 text-white shadow flex items-center gap-1.5" title="2D Floorplan Editor (Shortcut: 2)">
+          <span>2D Plan</span>
+        </button>
+        <button id="btnView3D" class="px-3 py-1 rounded-md text-xs font-semibold transition text-slate-300 hover:text-white flex items-center gap-1.5" title="3D MEP Walkthrough (Shortcut: 3)">
+          <span>3D MEP</span>
+        </button>
       </div>
     </div>
 
-    <!-- Primary Tools -->
-    <div class="flex items-center gap-1 overflow-x-auto py-0.5 px-1">
-      <button data-tool="select" class="tool-btn active px-2.5 py-1.5 rounded-lg border border-slate-700/80 bg-slate-800/80 hover:bg-slate-700 text-xs font-medium flex items-center gap-1.5 transition" title="Select / Move (V)">
-        <span>↖</span><span>Select</span>
-      </button>
-      <button data-tool="room" class="tool-btn px-2.5 py-1.5 rounded-lg border border-slate-700/80 bg-slate-800/80 hover:bg-slate-700 text-xs font-medium flex items-center gap-1.5 transition" title="Draw Room (R)">
-        <span>▭</span><span>Room</span>
-      </button>
+    <!-- Global HVAC Constraints -->
+    <div class="flex flex-wrap items-center gap-2">
+      <!-- Max Velocity -->
+      <label class="flex items-center gap-1.5 bg-slate-800/80 border border-slate-700 rounded-lg px-2 py-1">
+        <span class="text-[11px] text-slate-400 font-medium whitespace-nowrap">Max Vel</span>
+        <input id="inputMaxVel" type="number" min="100" max="5000" step="50" value="800"
+          class="w-16 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs font-mono text-sky-300 focus:outline-none focus:border-sky-400 text-right" />
+        <span class="text-[10px] text-slate-400 font-mono">FPM</span>
+      </label>
 
-      <div class="h-5 w-px bg-slate-700 mx-1"></div>
+      <!-- Max Static Pressure Loss -->
+      <label class="flex items-center gap-1.5 bg-slate-800/80 border border-slate-700 rounded-lg px-2 py-1">
+        <span class="text-[11px] text-slate-400 font-medium whitespace-nowrap">Max Static</span>
+        <input id="inputMaxStatic" type="number" min="0.05" max="5" step="0.05" value="0.5"
+          class="w-14 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs font-mono text-sky-300 focus:outline-none focus:border-sky-400 text-right" />
+        <span class="text-[10px] text-slate-400 font-mono">InWg</span>
+      </label>
 
-      <button data-tool="ahu" class="tool-btn px-2.5 py-1.5 rounded-lg border border-slate-700/80 bg-slate-800/80 hover:bg-slate-700 text-xs font-medium flex items-center gap-1.5 transition" title="Place AHU / Fan Unit">
-        <span class="text-amber-400">▣</span><span>AHU</span>
-      </button>
-      <button data-tool="supply_vent" class="tool-btn px-2.5 py-1.5 rounded-lg border border-slate-700/80 bg-slate-800/80 hover:bg-slate-700 text-xs font-medium flex items-center gap-1.5 transition" title="Place Supply Diffuser">
-        <span class="text-sky-400">⊞</span><span>Supply</span>
-      </button>
-      <button data-tool="return_vent" class="tool-btn px-2.5 py-1.5 rounded-lg border border-slate-700/80 bg-slate-800/80 hover:bg-slate-700 text-xs font-medium flex items-center gap-1.5 transition" title="Place Return Grille">
-        <span class="text-emerald-400">⊟</span><span>Return</span>
-      </button>
-      <button data-tool="exhaust_vent" class="tool-btn px-2.5 py-1.5 rounded-lg border border-slate-700/80 bg-slate-800/80 hover:bg-slate-700 text-xs font-medium flex items-center gap-1.5 transition" title="Place Exhaust Vent Anywhere">
-        <span class="text-rose-400">⊗</span><span>Exhaust</span>
-      </button>
+      <!-- Return Air Ratio -->
+      <label class="flex items-center gap-1.5 bg-slate-800/80 border border-slate-700 rounded-lg px-2 py-1" title="Return Air % of Exhaust (Remainder is Fresh Air Makeup)">
+        <span class="text-[11px] text-slate-400 font-medium whitespace-nowrap">Return</span>
+        <input id="inputReturnRatio" type="number" min="0" max="100" step="5" value="90"
+          class="w-12 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs font-mono text-blue-300 focus:outline-none focus:border-blue-400 text-right" />
+        <span class="text-[10px] text-slate-400 font-mono">%</span>
+        <span id="labelFreshRatio" class="text-[10px] text-emerald-400 font-mono border-l border-slate-700 pl-1.5">OA 10%</span>
+      </label>
 
-      <div class="h-5 w-px bg-slate-700 mx-1"></div>
-
-      <button data-tool="duct" class="tool-btn px-2.5 py-1.5 rounded-lg border border-slate-700/80 bg-slate-800/80 hover:bg-slate-700 text-xs font-medium flex items-center gap-1.5 transition" title="Draw Duct Run (0.5ft Snap)">
-        <span class="text-cyan-400">╱</span><span>Duct</span>
-      </button>
-      <button data-tool="pipe" class="tool-btn px-2.5 py-1.5 rounded-lg border border-slate-700/80 bg-slate-800/80 hover:bg-slate-700 text-xs font-medium flex items-center gap-1.5 transition" title="Draw Plumbing Pipe">
-        <span class="text-indigo-400">∿</span><span>Pipe</span>
-      </button>
+      <!-- Round / Rectangular Duct Toggle -->
+      <div class="flex items-center gap-1 bg-slate-800/90 border border-sky-500/40 rounded-lg p-0.5 shadow-sm">
+        <button id="btnShapeRound" class="px-2.5 py-1 rounded-md text-xs font-semibold transition bg-sky-600 text-white shadow">Round</button>
+        <button id="btnShapeRect" class="px-2.5 py-1 rounded-md text-xs font-semibold transition text-slate-300 hover:text-white">Rectangular</button>
+        <select id="selectGlobalRectHeight" title="Global Target Rectangular Duct Height"
+          class="hidden ml-0.5 bg-slate-950 border border-slate-700 rounded-md px-1.5 py-1 text-[11px] font-mono text-sky-300 focus:outline-none focus:border-sky-400">
+          <option value="auto">H: Auto</option>
+          <option value="6">H: 6"</option>
+          <option value="8">H: 8"</option>
+          <option value="10">H: 10"</option>
+          <option value="12">H: 12"</option>
+          <option value="14">H: 14"</option>
+          <option value="16">H: 16"</option>
+        </select>
+      </div>
     </div>
 
-    <!-- Right Controls: 2D/3D Toggle + Actions -->
-    <div class="flex items-center gap-1.5 shrink-0">
-      <div class="bg-slate-800 p-0.5 rounded-lg border border-slate-700 flex items-center">
-        <button id="btn-view-2d" class="px-2.5 py-1 rounded-md text-xs font-semibold bg-sky-600 text-white transition">2D Plan</button>
-        <button id="btn-view-3d" class="px-2.5 py-1 rounded-md text-xs font-semibold text-slate-300 hover:text-white transition">3D MEP</button>
-      </div>
-      <button id="btn-sample" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-200 transition hidden md:inline-flex" title="Load Starter Floorplan">
-        Sample
+    <!-- Action Buttons -->
+    <div class="flex items-center gap-1.5">
+      <button id="btnLoadSample" class="px-2.5 py-1.5 rounded-lg bg-indigo-600/90 hover:bg-indigo-500 text-white text-xs font-medium transition flex items-center gap-1.5 shadow-sm">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/></svg>
+        <span class="hidden md:inline">Sample</span>
       </button>
-      <button id="btn-clear" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-950/70 border border-slate-700 hover:border-rose-700 text-xs text-slate-300 hover:text-rose-300 transition" title="Clear Canvas">
+      <button id="btnDeleteSelected" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-600/80 border border-slate-700 hover:border-rose-500 text-slate-300 hover:text-white text-xs font-medium transition" title="Delete Selected (Del)">
+        Delete
+      </button>
+      <button id="btnClearAll" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition">
         Clear
-      </button>
-      <button id="btn-toggle-panel" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-200 transition" title="Toggle Inspector Drawer">
-        Panel
       </button>
     </div>
   </header>
 
-  <!-- SUB-TOOLBAR (Contextual options when Duct / Pipe / Room active) -->
-  <div id="sub-toolbar" class="bg-slate-900/80 border-b border-slate-800/90 px-4 py-1.5 flex items-center justify-between text-xs text-slate-300 z-10 shrink-0">
-    <div id="tool-hint" class="flex items-center gap-2">
-      <span class="inline-block w-2 h-2 rounded-full bg-sky-400"></span>
-      <span>Click an element to inspect or drag to move (snaps to 0.5 ft grid).</span>
-    </div>
-
-    <!-- Dynamic Tool Options -->
-    <div id="tool-options" class="flex items-center gap-3">
-      <!-- Duct Sub-options -->
-      <div id="opt-duct" class="hidden flex items-center gap-2">
-        <label class="text-slate-400">System:</label>
-        <select id="duct-sys" class="bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-xs text-white">
-          <option value="supply">Supply (Blue)</option>
-          <option value="return">Return (Green)</option>
-          <option value="exhaust">Exhaust (Red/Amber)</option>
-        </select>
-        <label class="text-slate-400">Profile:</label>
-        <select id="duct-shape" class="bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-xs text-white">
-          <option value="round">Round Ø</option>
-          <option value="rect">Rectangular W×H</option>
-        </select>
+  <!-- ==================== LIVE SYSTEM SUMMARY BAR ==================== -->
+  <section class="bg-slate-900/70 border-b border-slate-800/90 px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 text-xs shrink-0">
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+      <div class="flex items-center gap-1.5">
+        <span class="w-2 h-2 rounded-full bg-orange-500"></span>
+        <span class="text-slate-400">Exhaust:</span>
+        <span id="sumExhaustCfm" class="font-mono font-semibold text-orange-300">0 CFM</span>
       </div>
-
-      <!-- Pipe Sub-options -->
-      <div id="opt-pipe" class="hidden flex items-center gap-2">
-        <label class="text-slate-400">Pipe Type:</label>
-        <select id="pipe-sys" class="bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-xs text-white">
-          <option value="cw">Cold Water (CW)</option>
-          <option value="hw">Hot Water (HW)</option>
-          <option value="dwv">Drain / Vent (DWV)</option>
-        </select>
-        <label class="text-slate-400">Elev (ft):</label>
-        <input id="pipe-elev" type="number" step="0.5" value="9.0" class="w-16 bg-slate-800 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-white mono">
+      <div class="flex items-center gap-1.5">
+        <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+        <span class="text-slate-400">Return (<span id="sumReturnPct">90</span>%):</span>
+        <span id="sumReturnCfm" class="font-mono font-semibold text-sky-300">0 CFM</span>
       </div>
-
-      <!-- Room Preset Sub-option -->
-      <div id="opt-room" class="hidden flex items-center gap-2">
-        <label class="text-slate-400">Default Type:</label>
-        <select id="room-preset" class="bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-xs text-white">
-          <option value="Office">Office (6 ACH)</option>
-          <option value="Conference">Conference Room (8 ACH)</option>
-          <option value="Classroom">Classroom (8 ACH)</option>
-          <option value="Restroom">Restroom — Exhaust (12 ACH)</option>
-          <option value="Kitchen">Kitchen/Lab — Exhaust (15 ACH)</option>
-          <option value="Storage">Storage/Mech (4 ACH)</option>
-        </select>
-        <span class="text-slate-400 hidden sm:inline">Ceiling: <strong class="text-sky-300">10.0 ft</strong></span>
+      <div class="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/25 rounded-md px-2 py-0.5" title="Calculated outdoor air makeup balance (read-only)">
+        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+        <span class="text-slate-300">Fresh Air (<span id="sumFreshPct">10</span>%):</span>
+        <span id="sumFreshCfm" class="font-mono font-semibold text-emerald-300">0 CFM</span>
       </div>
-    </div>
-  </div>
-
-  <!-- MAIN WORKSPACE -->
-  <div class="flex-1 flex relative overflow-hidden">
-    <!-- 2D CAD CANVAS CONTAINER -->
-    <div id="view-2d-wrap" class="flex-1 relative bg-[#090e1a] overflow-hidden">
-      <canvas id="cad-canvas" class="w-full h-full cursor-crosshair"></canvas>
-
-      <!-- Bottom-Left Live Snap & Scale HUD -->
-      <div class="absolute bottom-3 left-3 bg-slate-900/90 backdrop-blur border border-slate-800 rounded-xl px-3 py-2 text-xs flex items-center gap-4 shadow-lg pointer-events-none">
-        <div>
-          <span class="text-slate-400">SNAP (0.5ft):</span>
-          <span id="hud-coords" class="mono text-sky-400 font-semibold ml-1">0.0, 0.0 ft</span>
-        </div>
-        <div class="h-3.5 w-px bg-slate-700"></div>
-        <div>
-          <span class="text-slate-400">ZOOM:</span>
-          <span id="hud-zoom" class="mono text-slate-200 ml-1">100%</span>
-        </div>
-        <div id="hud-measure-wrap" class="hidden flex items-center gap-3">
-          <div class="h-3.5 w-px bg-slate-700"></div>
-          <div>
-            <span class="text-slate-400">SEG:</span>
-            <span id="hud-measure" class="mono text-amber-300 font-semibold ml-1">0.0 ft</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Bottom-Right Zoom Controls -->
-      <div class="absolute bottom-3 right-3 flex items-center gap-1 bg-slate-900/90 border border-slate-800 rounded-xl p-1 shadow-lg">
-        <button id="zoom-out" class="w-7 h-7 rounded-lg hover:bg-slate-800 text-slate-300 font-bold">−</button>
-        <button id="zoom-reset" class="px-2 h-7 rounded-lg hover:bg-slate-800 text-[11px] text-slate-300 mono">Fit</button>
-        <button id="zoom-in" class="w-7 h-7 rounded-lg hover:bg-slate-800 text-slate-300 font-bold">+</button>
+      <div class="flex items-center gap-1.5 border-l border-slate-800 pl-3">
+        <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+        <span class="text-slate-400">Plumbing:</span>
+        <span id="sumPlumbingLen" class="font-mono font-semibold text-cyan-300">0 ft</span>
       </div>
     </div>
 
-    <!-- 3D MEP VIEWPORT CONTAINER -->
-    <div id="view-3d-wrap" class="hidden flex-1 relative bg-[#070b14] overflow-hidden">
-      <div id="three-container" class="w-full h-full"></div>
-      <div class="absolute bottom-3 left-3 bg-slate-900/90 backdrop-blur border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 pointer-events-none">
-        <span class="font-semibold text-sky-400">3D MEP View</span> • Drag to Orbit • Scroll to Zoom • Right-Drag to Pan • 10 ft Extruded Walls
+    <div class="flex flex-wrap items-center gap-3">
+      <div class="flex items-center gap-1.5">
+        <span class="text-slate-400">Peak Vel:</span>
+        <span id="sumPeakVel" class="font-mono font-semibold text-emerald-400">0 FPM</span>
       </div>
+      <div class="flex items-center gap-1.5">
+        <span class="text-slate-400">Max Static:</span>
+        <span id="sumMaxStatic" class="font-mono font-semibold text-emerald-400">0.000 InWg</span>
+      </div>
+      <span id="sumClashBadge" class="hidden px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40" title="3D clearance warning between ductwork and plumbing">
+        0 CLASHES
+      </span>
+      <span id="sumStatusBadge" class="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+        SYSTEM OK
+      </span>
     </div>
+  </section>
 
-    <!-- RIGHT INSPECTOR & SYSTEM SUMMARY DRAWER -->
-    <aside id="inspector-drawer" class="w-80 bg-slate-900/95 border-l border-slate-800 flex flex-col shrink-0 z-10 transition-all">
-      <!-- System KPI Summary -->
-      <div class="p-3.5 border-b border-slate-800">
-        <div class="flex items-center justify-between mb-2.5">
-          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400">System Totals (10ft Ceiling)</h2>
-          <span id="sys-status-badge" class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-            PASS ≤800 FPM
-          </span>
+  <!-- ==================== MAIN WORKSPACE ==================== -->
+  <div class="flex-1 flex min-h-0 overflow-hidden relative">
+
+    <!-- LEFT TOOL PALETTE -->
+    <aside class="w-14 sm:w-44 bg-slate-900/95 border-r border-slate-800 flex flex-col py-2 px-1.5 sm:px-2 gap-1 overflow-y-auto shrink-0 z-20">
+      <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold px-2 pt-0.5 pb-0.5 hidden sm:block">Navigation</div>
+      <button data-tool="select" class="tool-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition bg-sky-600 text-white">
+        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5"/></svg>
+        <span class="hidden sm:inline flex-1 text-left">Select / Edit</span>
+        <span class="hidden sm:inline text-[10px] opacity-60 font-mono">V</span>
+      </button>
+      <button data-tool="pan" class="tool-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition text-slate-300 hover:bg-slate-800">
+        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11"/></svg>
+        <span class="hidden sm:inline flex-1 text-left">Pan Canvas</span>
+        <span class="hidden sm:inline text-[10px] opacity-60 font-mono">H</span>
+      </button>
+
+      <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold px-2 pt-2 pb-0.5 hidden sm:block">Floorplan Rooms</div>
+      <button data-tool="rect" class="tool-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition text-slate-300 hover:bg-slate-800">
+        <svg class="w-4 h-4 shrink-0 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/></svg>
+        <span class="hidden sm:inline flex-1 text-left">Rect Room</span>
+        <span class="hidden sm:inline text-[10px] opacity-60 font-mono">R</span>
+      </button>
+      <button data-tool="circle" class="tool-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition text-slate-300 hover:bg-slate-800">
+        <svg class="w-4 h-4 shrink-0 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg>
+        <span class="hidden sm:inline flex-1 text-left">Circle Room</span>
+        <span class="hidden sm:inline text-[10px] opacity-60 font-mono">C</span>
+      </button>
+      <button data-tool="poly" class="tool-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition text-slate-300 hover:bg-slate-800">
+        <svg class="w-4 h-4 shrink-0 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 5h8v6h8v8H4V5z"/></svg>
+        <span class="hidden sm:inline flex-1 text-left">Polygon / L</span>
+        <span class="hidden sm:inline text-[10px] opacity-60 font-mono">P</span>
+      </button>
+
+      <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold px-2 pt-2 pb-0.5 hidden sm:block">HVAC Ductwork</div>
+      <button data-tool="ahu" class="tool-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition text-slate-300 hover:bg-slate-800">
+        <svg class="w-4 h-4 shrink-0 text-indigo-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 12a3 3 0 106 0 3 3 0 00-6 0z"/></svg>
+        <span class="hidden sm:inline flex-1 text-left">Place AHU</span>
+        <span class="hidden sm:inline text-[10px] opacity-60 font-mono">A</span>
+      </button>
+      <button data-tool="duct_exhaust" class="tool-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition text-slate-300 hover:bg-slate-800">
+        <span class="w-3.5 h-3.5 rounded-full bg-orange-500 shrink-0 ring-2 ring-orange-500/30"></span>
+        <span class="hidden sm:inline flex-1 text-left">Exhaust Duct</span>
+        <span class="hidden sm:inline text-[10px] opacity-60 font-mono">E</span>
+      </button>
+      <button data-tool="duct_return" class="tool-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition text-slate-300 hover:bg-slate-800">
+        <span class="w-3.5 h-3.5 rounded-full bg-sky-400 shrink-0 ring-2 ring-sky-400/30"></span>
+        <span class="hidden sm:inline flex-1 text-left">Return Duct</span>
+        <span class="hidden sm:inline text-[10px] opacity-60 font-mono">T</span>
+      </button>
+
+      <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold px-2 pt-2 pb-0.5 hidden sm:block">Plumbing Pipes</div>
+      <button data-tool="pipe_cold" class="tool-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition text-slate-300 hover:bg-slate-800">
+        <span class="w-3.5 h-3.5 rounded-full bg-cyan-400 shrink-0 ring-2 ring-cyan-400/30"></span>
+        <span class="hidden sm:inline flex-1 text-left">Cold Water</span>
+        <span class="hidden sm:inline text-[10px] opacity-60 font-mono">W</span>
+      </button>
+      <button data-tool="pipe_hot" class="tool-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition text-slate-300 hover:bg-slate-800">
+        <span class="w-3.5 h-3.5 rounded-full bg-rose-500 shrink-0 ring-2 ring-rose-500/30"></span>
+        <span class="hidden sm:inline flex-1 text-left">Hot Water</span>
+        <span class="hidden sm:inline text-[10px] opacity-60 font-mono">O</span>
+      </button>
+      <button data-tool="pipe_drain" class="tool-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition text-slate-300 hover:bg-slate-800">
+        <span class="w-3.5 h-3.5 rounded-full bg-purple-500 shrink-0 ring-2 ring-purple-500/30"></span>
+        <span class="hidden sm:inline flex-1 text-left">Drain / DWV</span>
+        <span class="hidden sm:inline text-[10px] opacity-60 font-mono">D</span>
+      </button>
+
+      <div class="mt-auto pt-2.5 border-t border-slate-800 flex flex-col gap-1.5">
+        <label class="flex flex-col gap-1 px-2 py-1.5 rounded-lg text-xs font-medium bg-sky-500/15 text-sky-300 border border-sky-500/30">
+          <div class="flex items-center justify-between">
+            <span class="hidden sm:inline text-[11px]">Drag Snap</span>
+            <span class="sm:hidden text-[10px] font-mono">Snap</span>
+            <span id="snapBadge" class="text-[10px] font-mono font-bold">0.1"</span>
+          </div>
+          <select id="selectSnapStep" title="Dragging Snap Increment"
+            class="w-full bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-[11px] font-mono text-sky-200 focus:outline-none focus:border-sky-400">
+            <option value="0.1in" selected>0.1 in (1/10")</option>
+            <option value="0.1ft">0.1 ft (1/10')</option>
+            <option value="1in">1 in</option>
+            <option value="1ft">1 ft</option>
+            <option value="off">Free (No Snap)</option>
+          </select>
+        </label>
+        <button id="btnToggleOrtho" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium bg-sky-500/15 text-sky-300 border border-sky-500/30 transition">
+          <span class="hidden sm:inline">90° Ortho</span>
+          <span class="sm:hidden text-[10px] font-mono">90°</span>
+          <span id="orthoBadge" class="text-[10px] font-mono font-bold">ON</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- CENTER INTERACTIVE VIEWPORT (2D CAD + 3D THREE.JS) -->
+    <main id="canvasContainer" class="flex-1 relative bg-[#0b1120] overflow-hidden min-w-0">
+      <!-- 2D Blueprint Canvas -->
+      <canvas id="cadCanvas" class="w-full h-full"></canvas>
+
+      <!-- 3D MEP WebGL Canvas Container -->
+      <div id="view3DContainer" class="hidden absolute inset-0 bg-[#070c18]"></div>
+
+      <!-- Floating Top-Center Tool Hint Banner -->
+      <div id="toolHint" class="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur border border-slate-700/80 text-slate-200 px-3.5 py-1.5 rounded-full text-xs shadow-lg flex items-center gap-2 z-10 max-w-[90%] truncate">
+        <span class="w-2 h-2 rounded-full bg-sky-400 animate-pulse shrink-0"></span>
+        <span id="toolHintText">Click a room, duct, or pipe to inspect &amp; edit. Drag handles to resize or reroute.</span>
+      </div>
+
+      <!-- Floating Quick Room Size Bar (Shown for Rect / Circle Room Tools) -->
+      <div id="quickRoomBar" class="hidden absolute top-12 left-1/2 -translate-x-1/2 bg-slate-900/95 backdrop-blur border border-cyan-500/50 rounded-xl px-3 py-2 shadow-2xl flex flex-wrap items-center justify-center gap-2 z-20 max-w-[94%]">
+        <span class="text-[11px] font-semibold text-cyan-300 whitespace-nowrap">Drag OR Type Size (0.1 ft):</span>
+        <input id="quickRoomName" type="text" placeholder="Room Name"
+          class="w-24 bg-slate-950 border border-slate-700 rounded-md px-2 py-1 text-xs text-white focus:outline-none focus:border-cyan-400" />
+        <div id="quickRectFields" class="flex items-center gap-1.5">
+          <label class="flex items-center gap-1 text-[11px] text-slate-300">
+            <span>W</span>
+            <input id="quickRoomW" type="number" min="0.5" step="0.1" value="12.0"
+              class="w-16 bg-slate-950 border border-slate-700 rounded-md px-1.5 py-1 text-xs font-mono text-cyan-200 text-right focus:outline-none focus:border-cyan-400" />
+          </label>
+          <span class="text-slate-500 text-xs">×</span>
+          <label class="flex items-center gap-1 text-[11px] text-slate-300">
+            <span>L</span>
+            <input id="quickRoomL" type="number" min="0.5" step="0.1" value="10.0"
+              class="w-16 bg-slate-950 border border-slate-700 rounded-md px-1.5 py-1 text-xs font-mono text-cyan-200 text-right focus:outline-none focus:border-cyan-400" />
+            <span class="text-[10px] text-slate-400 font-mono">ft</span>
+          </label>
         </div>
-
-        <div class="grid grid-cols-3 gap-2 text-center">
-          <div class="bg-slate-800/70 border border-slate-700/70 rounded-xl p-2">
-            <div class="text-[10px] text-sky-400 font-semibold">SUPPLY</div>
-            <div id="kpi-supply" class="mono text-sm font-bold text-white mt-0.5">0</div>
-            <div class="text-[10px] text-slate-400">CFM</div>
-          </div>
-          <div class="bg-slate-800/70 border border-slate-700/70 rounded-xl p-2">
-            <div class="text-[10px] text-emerald-400 font-semibold">RETURN</div>
-            <div id="kpi-return" class="mono text-sm font-bold text-white mt-0.5">0</div>
-            <div class="text-[10px] text-slate-400">CFM</div>
-          </div>
-          <div class="bg-slate-800/70 border border-slate-700/70 rounded-xl p-2">
-            <div class="text-[10px] text-rose-400 font-semibold">EXHAUST</div>
-            <div id="kpi-exhaust" class="mono text-sm font-bold text-white mt-0.5">0</div>
-            <div class="text-[10px] text-slate-400">CFM</div>
-          </div>
+        <div id="quickCircleFields" class="hidden flex items-center gap-1.5">
+          <label class="flex items-center gap-1 text-[11px] text-slate-300">
+            <span>Diameter</span>
+            <input id="quickRoomDia" type="number" min="1" step="0.1" value="12.0"
+              class="w-16 bg-slate-950 border border-slate-700 rounded-md px-1.5 py-1 text-xs font-mono text-cyan-200 text-right focus:outline-none focus:border-cyan-400" />
+            <span class="text-[10px] text-slate-400 font-mono">ft</span>
+          </label>
         </div>
+        <label class="flex items-center gap-1 text-[11px] text-slate-300">
+          <span>Ht</span>
+          <input id="quickRoomHt" type="number" min="4" max="40" step="0.1" value="10.0"
+            class="w-14 bg-slate-950 border border-slate-700 rounded-md px-1.5 py-1 text-xs font-mono text-slate-200 text-right focus:outline-none focus:border-cyan-400" />
+        </label>
+        <label class="flex items-center gap-1 text-[11px] text-slate-300">
+          <span>ACH</span>
+          <input id="quickRoomAch" type="number" min="0.5" max="60" step="0.5" value="6"
+            class="w-12 bg-slate-950 border border-slate-700 rounded-md px-1.5 py-1 text-xs font-mono text-sky-300 text-right focus:outline-none focus:border-cyan-400" />
+        </label>
+        <button id="btnPlaceQuickRoom" class="px-3 py-1 rounded-md bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold transition shadow-sm whitespace-nowrap">
+          + Place Room
+        </button>
+      </div>
 
-        <div class="mt-2.5 flex items-center justify-between text-xs bg-slate-950/60 rounded-lg px-2.5 py-1.5 border border-slate-800">
-          <span class="text-slate-400">Max Static Loss:</span>
-          <span id="kpi-static" class="mono font-semibold text-slate-200">0.00 in. w.g.</span>
+      <!-- Floating Active Poly/Duct/Pipe Action Pill (2D) -->
+      <div id="drawingActions" class="hidden absolute top-12 left-1/2 -translate-x-1/2 bg-slate-900/95 border border-sky-500/50 rounded-full px-2 py-1 shadow-xl flex items-center gap-2 z-10">
+        <button id="btnFinishDraw" class="px-3 py-1 rounded-full bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium transition">Finish (Enter)</button>
+        <button id="btnCancelDraw" class="px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition">Cancel (Esc)</button>
+      </div>
+
+      <!-- 2D HUD: Bottom-Left Coordinates & Scale -->
+      <div id="hud2DLeft" class="pointer-events-none absolute bottom-3 left-3 flex items-center gap-2 z-10">
+        <div class="bg-slate-900/90 backdrop-blur border border-slate-700/80 rounded-lg px-2.5 py-1 text-[11px] font-mono text-slate-300 shadow">
+          X: <span id="hudX" class="text-sky-300">0.0</span> ft &nbsp;|&nbsp; Y: <span id="hudY" class="text-sky-300">0.0</span> ft
+        </div>
+        <div class="hidden sm:block bg-slate-900/90 backdrop-blur border border-slate-700/80 rounded-lg px-2.5 py-1 text-[11px] font-mono text-slate-400 shadow">
+          Zoom: <span id="hudZoom" class="text-slate-200">100%</span>
         </div>
       </div>
 
-      <!-- Selected Element Inspector -->
-      <div class="flex-1 overflow-y-auto p-3.5 space-y-4">
-        <div id="inspector-empty" class="text-center py-6 px-3 bg-slate-800/30 border border-dashed border-slate-700/80 rounded-xl">
-          <div class="text-slate-400 text-xs">Click any Room, Duct, Vent, Exhaust, AHU, or Pipe to edit its properties.</div>
-          <div class="text-[11px] text-slate-500 mt-1.5">Press <span class="mono text-slate-300">Delete</span> or <span class="mono text-slate-300">Backspace</span> to remove selected items.</div>
+      <!-- 2D HUD: Bottom-Right Zoom Controls -->
+      <div id="hud2DRight" class="absolute bottom-3 right-3 flex items-center gap-1 bg-slate-900/90 backdrop-blur border border-slate-700/80 rounded-lg p-1 shadow z-10">
+        <button id="btnZoomOut" class="w-7 h-7 rounded hover:bg-slate-800 text-slate-300 flex items-center justify-center font-mono text-sm" title="Zoom Out">-</button>
+        <button id="btnZoomFit" class="px-2 h-7 rounded hover:bg-slate-800 text-slate-300 text-[11px] font-medium" title="Fit Floorplan">Fit</button>
+        <button id="btnZoomIn" class="w-7 h-7 rounded hover:bg-slate-800 text-slate-300 flex items-center justify-center font-mono text-sm" title="Zoom In">+</button>
+      </div>
+
+      <!-- 3D HUD: Camera Presets & Layer Visibility Controls -->
+      <div id="hud3DControls" class="hidden absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 pointer-events-none z-10">
+        <div class="pointer-events-auto flex items-center gap-1 bg-slate-900/90 backdrop-blur border border-slate-700/80 rounded-lg p-1 shadow text-[11px]">
+          <button data-cam="iso" class="cam-btn px-2 py-1 rounded hover:bg-slate-800 text-sky-300 font-medium">Iso</button>
+          <button data-cam="top" class="cam-btn px-2 py-1 rounded hover:bg-slate-800 text-slate-300 font-medium">Top</button>
+          <button data-cam="front" class="cam-btn px-2 py-1 rounded hover:bg-slate-800 text-slate-300 font-medium">Front</button>
+          <button data-cam="side" class="cam-btn px-2 py-1 rounded hover:bg-slate-800 text-slate-300 font-medium">Side</button>
         </div>
 
-        <div id="inspector-content" class="hidden space-y-3"></div>
-
-        <!-- Room CFM & 10ft Volume Breakdown Table -->
-        <div>
-          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Rooms & 2D Volume Loads</h3>
-          <div id="room-list" class="space-y-2"></div>
+        <div class="pointer-events-auto flex items-center gap-1.5 bg-slate-900/90 backdrop-blur border border-slate-700/80 rounded-lg p-1 shadow text-[11px]">
+          <button id="btn3DWalls" class="px-2 py-1 rounded bg-sky-600/30 text-sky-200 border border-sky-500/40 font-medium">Walls: X-Ray</button>
+          <button id="btn3DHvac" class="px-2 py-1 rounded bg-orange-500/20 text-orange-200 border border-orange-500/40 font-medium">HVAC</button>
+          <button id="btn3DPlumbing" class="px-2 py-1 rounded bg-cyan-500/20 text-cyan-200 border border-cyan-500/40 font-medium">Plumbing</button>
         </div>
+      </div>
+
+      <!-- Toast Notification -->
+      <div id="toast" class="pointer-events-none opacity-0 transition-opacity duration-200 absolute bottom-14 left-1/2 -translate-x-1/2 bg-slate-800/95 border border-sky-500/40 text-sky-100 px-4 py-2 rounded-lg text-xs font-medium shadow-xl z-20">
+        Toast message
+      </div>
+    </main>
+
+    <!-- RIGHT PROPERTIES INSPECTOR PANEL -->
+    <aside id="inspectorPanel" class="w-64 lg:w-72 bg-slate-900/95 border-l border-slate-800 flex flex-col overflow-y-auto shrink-0 z-20 hidden md:flex">
+      <div class="px-3.5 py-2.5 border-b border-slate-800 flex items-center justify-between">
+        <h2 id="inspectorTitle" class="text-xs font-bold uppercase tracking-wider text-slate-300">Inspector</h2>
+        <span id="inspectorTypeBadge" class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400">NONE</span>
+      </div>
+      <div id="inspectorBody" class="p-3.5 flex-1 flex flex-col gap-3 text-xs">
+        <!-- Dynamically populated -->
       </div>
     </aside>
   </div>
 
-  <!-- Confirmation / Notification Toast -->
-  <div id="toast" class="fixed bottom-14 left-1/2 -translate-x-1/2 bg-slate-800 border border-slate-600 text-white text-xs px-3.5 py-2 rounded-xl shadow-xl opacity-0 pointer-events-none transition-opacity z-50"></div>
+  <!-- ==================== COLLAPSIBLE BOTTOM SCHEDULE DRAWER ==================== -->
+  <section id="scheduleDrawer" class="bg-slate-900 border-t border-slate-800 flex flex-col shrink-0 z-30 transition-all duration-200" style="height: 205px;">
+    <!-- Drawer Header -->
+    <div class="px-3 py-1.5 border-b border-slate-800 flex items-center justify-between bg-slate-900/95">
+      <div class="flex items-center gap-1.5 overflow-x-auto">
+        <button id="tabDucts" class="px-3 py-1 rounded-md text-xs font-semibold bg-sky-600/20 text-sky-300 border border-sky-500/30 transition whitespace-nowrap">
+          Duct Schedule (<span id="countDucts">0</span>)
+        </button>
+        <button id="tabPlumbing" class="px-3 py-1 rounded-md text-xs font-semibold text-slate-400 hover:text-slate-200 border border-transparent transition whitespace-nowrap">
+          Plumbing Schedule (<span id="countPipes">0</span>)
+        </button>
+        <button id="tabRooms" class="px-3 py-1 rounded-md text-xs font-semibold text-slate-400 hover:text-slate-200 border border-transparent transition whitespace-nowrap">
+          Room Schedule (<span id="countRooms">0</span>)
+        </button>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <button id="btnToggleInspectorMobile" class="md:hidden px-2.5 py-1 rounded bg-slate-800 text-slate-300 text-xs border border-slate-700">
+          Inspector
+        </button>
+        <button id="btnToggleSchedule" class="px-2.5 py-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white text-xs flex items-center gap-1 transition">
+          <span id="scheduleToggleLabel">Collapse</span>
+          <svg id="scheduleChevron" class="w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+      </div>
+    </div>
 
+    <!-- Drawer Table Content -->
+    <div id="scheduleBody" class="flex-1 overflow-auto">
+      <!-- Ducts Table -->
+      <table id="tableDucts" class="w-full text-left border-collapse text-xs">
+        <thead class="bg-slate-950/80 sticky top-0 text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-800">
+          <tr>
+            <th class="py-2 px-3">Duct ID</th>
+            <th class="py-2 px-2">System</th>
+            <th class="py-2 px-2">Shape</th>
+            <th class="py-2 px-2 text-right">Size</th>
+            <th class="py-2 px-2 text-right">Elev Z</th>
+            <th class="py-2 px-2 text-right">CFM</th>
+            <th class="py-2 px-2 text-right">Len (ft)</th>
+            <th class="py-2 px-2 text-right">Elbows</th>
+            <th class="py-2 px-2 text-right">Velocity</th>
+            <th class="py-2 px-2 text-right">Path Loss</th>
+            <th class="py-2 px-3 text-center">Status</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyDucts" class="divide-y divide-slate-800/70 font-mono text-[11px]"></tbody>
+      </table>
+
+      <!-- Plumbing Table -->
+      <table id="tablePlumbing" class="hidden w-full text-left border-collapse text-xs">
+        <thead class="bg-slate-950/80 sticky top-0 text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-800">
+          <tr>
+            <th class="py-2 px-3">Pipe ID</th>
+            <th class="py-2 px-2">System</th>
+            <th class="py-2 px-2 text-right">Diameter</th>
+            <th class="py-2 px-2 text-right">Start Z</th>
+            <th class="py-2 px-2 text-right">End Z</th>
+            <th class="py-2 px-2 text-right">Slope</th>
+            <th class="py-2 px-2 text-right">Run (ft)</th>
+            <th class="py-2 px-2 text-right">Elbows</th>
+            <th class="py-2 px-3 text-right">Total Drop</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyPlumbing" class="divide-y divide-slate-800/70 font-mono text-[11px]"></tbody>
+      </table>
+
+      <!-- Rooms Table -->
+      <table id="tableRooms" class="hidden w-full text-left border-collapse text-xs">
+        <thead class="bg-slate-950/80 sticky top-0 text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-800">
+          <tr>
+            <th class="py-2 px-3">Room Name</th>
+            <th class="py-2 px-2">Shape</th>
+            <th class="py-2 px-2 text-right">Area (ft²)</th>
+            <th class="py-2 px-2 text-right">Height (ft)</th>
+            <th class="py-2 px-2 text-right">Volume (ft³)</th>
+            <th class="py-2 px-2 text-right">ACH</th>
+            <th class="py-2 px-2 text-right">Exhaust CFM</th>
+            <th class="py-2 px-3 text-right">Return CFM</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyRooms" class="divide-y divide-slate-800/70 font-mono text-[11px]"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ==================== APPLICATION JAVASCRIPT ==================== -->
   <script>
-    // =========================================================================
-    // 1. CONSTANTS & ENGINEERING PRESETS
-    // =========================================================================
-    const GRID_SNAP = 0.5; // 0.5-foot (6 inch) grid snapping
-    const DEFAULT_CEILING_FT = 10.0; // Standard 10-foot ceiling height for 2D volume calcs
-    const MAX_VELOCITY_FPM = 800; // Target residential/light-commercial quiet duct velocity limit
-    const MAX_STATIC_INWG = 0.50; // Total system static pressure threshold (in. w.g.)
+    (() => {
+      'use strict';
 
-    const ROOM_PRESETS = {
-      Office:     { ach: 6,  mode: 'supply_return', color: 'rgba(56, 189, 248, 0.08)', border: '#38bdf8' },
-      Conference: { ach: 8,  mode: 'supply_return', color: 'rgba(129, 140, 248, 0.08)', border: '#818cf8' },
-      Classroom:  { ach: 8,  mode: 'supply_return', color: 'rgba(52, 211, 153, 0.08)', border: '#34d399' },
-      Restroom:   { ach: 12, mode: 'exhaust_only',  color: 'rgba(251, 113, 133, 0.10)', border: '#fb7185' },
-      Kitchen:    { ach: 15, mode: 'exhaust_only',  color: 'rgba(251, 146, 60, 0.10)',  border: '#fb923c' },
-      Storage:    { ach: 4,  mode: 'supply_return', color: 'rgba(148, 163, 184, 0.08)', border: '#94a3b8' }
-    };
+      // =========================================================================
+      // 1. CONSTANTS & STANDARD SIZING TABLES
+      // =========================================================================
+      const STANDARD_ROUND_IN = [
+        4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 40, 44, 48, 54, 60
+      ];
 
-    const SYSTEM_COLORS = {
-      supply:  { stroke: '#38bdf8', glow: 'rgba(56, 189, 248, 0.35)', hex: 0x38bdf8, label: 'Supply Air' },
-      return:  { stroke: '#34d399', glow: 'rgba(52, 211, 153, 0.35)', hex: 0x34d399, label: 'Return Air' },
-      exhaust: { stroke: '#fb7185', glow: 'rgba(251, 113, 133, 0.35)', hex: 0xfb7185, label: 'Exhaust Air' },
-      cw:      { stroke: '#3b82f6', hex: 0x3b82f6, label: 'Cold Water' },
-      hw:      { stroke: '#ef4444', hex: 0xef4444, label: 'Hot Water' },
-      dwv:     { stroke: '#a855f7', hex: 0xa855f7, label: 'Drain / DWV' }
-    };
+      const RECT_HEIGHT_OPTIONS = [6, 8, 10, 12, 14, 16];
 
-    // Standard round duct diameters (inches)
-    const STD_ROUND_SIZES = [4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30];
+      const STANDARD_RECT_IN = [
+        [6, 6], [8, 6], [8, 8], [10, 6], [10, 8], [12, 8], [12, 10], [14, 8], [14, 10],
+        [16, 10], [16, 12], [18, 12], [20, 12], [20, 14], [22, 14], [24, 14], [24, 16],
+        [26, 16], [28, 16], [28, 18], [30, 18], [32, 20], [36, 20], [36, 24], [40, 24],
+        [44, 24], [48, 24], [48, 30], [54, 30], [60, 30], [60, 36]
+      ];
 
-    // =========================================================================
-    // 2. APPLICATION STATE
-    // =========================================================================
-    const state = {
-      viewMode: '2d', // '2d' or '3d'
-      tool: 'select',
-      rooms: [],
-      equipment: [], // { id, type: 'ahu' | 'supply_vent' | 'return_vent' | 'exhaust_vent', x, y, manualCfm: null, calcCfm: 0, label }
-      ducts: [],     // { id, sys: 'supply'|'return'|'exhaust', shape: 'round'|'rect', x1, y1, x2, y2, manualDia: null, aspect: 1.5, cfm: 0, velocity: 0, dp: 0, sizeLabel: '' }
-      pipes: [],     // { id, sys: 'cw'|'hw'|'dwv', x1, y1, x2, y2, elev: 9.0, dia: 1.0 }
-      selected: null, // { kind: 'room'|'equipment'|'duct'|'pipe', id }
-      camera: {
-        x: 60,        // screen px offset of world origin (0,0)
-        y: 60,
-        pxPerFt: 24   // 24 px = 1 ft => 12 px = 0.5 ft grid
-      },
-      pointer: {
-        rawX: 0, rawY: 0,
-        snapX: 0, snapY: 0,
-        isDown: false,
-        isPanning: false,
-        panStartX: 0, panStartY: 0,
-        dragStartSnapX: 0, dragStartSnapY: 0,
-        dragOrig: null,
-        activeDraw: null // for room / duct / pipe drawing
+      const STANDARD_PIPE_IN = [
+        { val: 0.5, label: '1/2"' },
+        { val: 0.75, label: '3/4"' },
+        { val: 1, label: '1"' },
+        { val: 1.25, label: '1-1/4"' },
+        { val: 1.5, label: '1-1/2"' },
+        { val: 2, label: '2"' },
+        { val: 3, label: '3"' },
+        { val: 4, label: '4"' },
+        { val: 6, label: '6"' },
+      ];
+
+      const ELBOW_EQ_LEN_FT = 15;
+
+      const DUCT_COLORS = {
+        exhaust: { stroke: '#f97316', hex3d: 0xf97316, label: 'Exhaust', defaultZ: 8.5, badge: 'bg-orange-500/20 text-orange-300 border-orange-500/40' },
+        return:  { stroke: '#38bdf8', hex3d: 0x38bdf8, label: 'Return',  defaultZ: 9.2, badge: 'bg-sky-500/20 text-sky-300 border-sky-500/40' },
+      };
+
+      const PIPE_COLORS = {
+        cold:  { stroke: '#06b6d4', hex3d: 0x06b6d4, label: 'Cold Water', prefix: 'CW',  defaultZ: 7.6, defaultDia: 1,    defaultSlope: 0,    badge: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' },
+        hot:   { stroke: '#f43f5e', hex3d: 0xf43f5e, label: 'Hot Water',  prefix: 'HW',  defaultZ: 7.2, defaultDia: 0.75, defaultSlope: 0,    badge: 'bg-rose-500/20 text-rose-300 border-rose-500/40' },
+        drain: { stroke: '#a855f7', hex3d: 0xa855f7, label: 'Drain / DWV', prefix: 'DWV', defaultZ: 1.8, defaultDia: 3,    defaultSlope: 0.25, badge: 'bg-purple-500/20 text-purple-300 border-purple-500/40' },
+      };
+
+      // =========================================================================
+      // 2. APPLICATION STATE
+      // =========================================================================
+      const state = {
+        // View Mode
+        viewMode: '2d', // '2d' | '3d'
+        show3DWalls: 'xray', // 'xray' | 'solid' | 'wire'
+        show3DHvac: true,
+        show3DPlumbing: true,
+
+        // Global HVAC Design Constraints
+        maxVelocity: 800,
+        maxStaticLoss: 0.5,
+        returnRatioPct: 90,
+        ductShape: 'round',
+        rectMaxHeight: 'auto',
+
+        // 2D Viewport / Camera (World units = feet)
+        panX: 80,
+        panY: 70,
+        zoom: 18,
+
+        // Active Tool & CAD Toggles
+        tool: 'select',
+        snapMode: '0.1in', // '0.1in' | '0.1ft' | '1in' | '1ft' | 'off'
+        orthoSnap: true,
+// ... existing code ... -->
+      const hudZoom = document.getElementById('hudZoom');
+      const toolHintText = document.getElementById('toolHintText');
+      const drawingActions = document.getElementById('drawingActions');
+      const quickRoomBar = document.getElementById('quickRoomBar');
+      const quickRectFields = document.getElementById('quickRectFields');
+      const quickCircleFields = document.getElementById('quickCircleFields');
+      const selectSnapStep = document.getElementById('selectSnapStep');
+      const snapBadge = document.getElementById('snapBadge');
+// ... existing code ... -->
+      function dist(a, b) {
+        return Math.hypot(a.x - b.x, a.y - b.y);
       }
-    };
 
-    // Snap helper: always snaps to 0.5 ft
-    function snapHalf(val) {
-      return Math.round(val / GRID_SNAP) * GRID_SNAP;
-    }
+      function snapVal(v) {
+        if (state.snapMode === '0.1in') return Math.round(v * 120) / 120; // 1/10th of an inch
+        if (state.snapMode === '1in')   return Math.round(v * 12) / 12;   // 1 inch
+        if (state.snapMode === '0.1ft') return Math.round(v * 10) / 10;   // 1/10th of a foot
+        if (state.snapMode === '1ft')   return Math.round(v);             // 1 foot
+        return v;
+      }
 
-    function uid(prefix) {
-      return prefix + '_' + Math.random().toString(36).slice(2, 8);
-    }
+      function formatFt(ft) {
+        const rounded = Math.round(ft * 10) / 10;
+        return Number.isInteger(rounded) ? `${rounded}` : rounded.toFixed(1);
+      }
 
-    function showToast(msg) {
-      const el = document.getElementById('toast');
-      el.textContent = msg;
-      el.style.opacity = '1';
-      clearTimeout(el._timer);
-      el._timer = setTimeout(() => { el.style.opacity = '0'; }, 2400);
-    }
+      function formatFtIn(ft) {
+        const sign = ft < 0 ? '-' : '';
+        const absFt = Math.abs(ft);
+        const totalIn = Math.round(absFt * 120) / 10; // tenths of an inch
+        const wholeFt = Math.floor(totalIn / 12);
+        const remIn = Math.round((totalIn - wholeFt * 12) * 10) / 10;
+        const inStr = Number.isInteger(remIn) ? `${remIn}"` : `${remIn.toFixed(1)}"`;
+        return `${sign}${wholeFt}' ${inStr}`;
+      }
 
-    // =========================================================================
-    // 3. HVAC & MEP ENGINEERING CALCULATION ENGINE
-    // =========================================================================
-    function recalculateAll() {
-      // A. Room 2D Volume (Area * Ceiling Height, default 10 ft) & Required CFM
-      state.rooms.forEach(room => {
-        const w = Math.abs(room.x2 - room.x1);
-        const h = Math.abs(room.y2 - room.y1);
-        const ceil = Number(room.ceiling) || DEFAULT_CEILING_FT;
-        room.width = w;
-        room.length = h;
-        room.area = w * h;
-        room.volume = room.area * ceil; // Ft^3 with 10ft ceiling
-        const ach = Number(room.ach) || 6;
-        room.reqCfm = Math.round((room.volume * ach) / 60);
-      });
-
-      // Reset equipment calculated CFM
-      state.equipment.forEach(eq => {
-        eq.calcCfm = 0;
-        eq.roomName = 'Unassigned';
-      });
-
-      // B. Assign Room CFM loads to Supply Diffusers, Return Grilles, and User-Placed Exhaust Vents
-      state.rooms.forEach(room => {
-        const minX = Math.min(room.x1, room.x2);
-        const maxX = Math.max(room.x1, room.x2);
-        const minY = Math.min(room.y1, room.y2);
-        const maxY = Math.max(room.y1, room.y2);
-
-        const inside = state.equipment.filter(eq =>
-          eq.x >= minX && eq.x <= maxX && eq.y >= minY && eq.y <= maxY
-        );
-
-        const supplies = inside.filter(e => e.type === 'supply_vent');
-        const returns  = inside.filter(e => e.type === 'return_vent');
-        const exhausts = inside.filter(e => e.type === 'exhaust_vent');
-
-        inside.forEach(e => { e.roomName = room.name; });
-
-        // Distribute Supply CFM
-        if (supplies.length > 0) {
-          const manualSum = supplies.reduce((acc, v) => acc + (v.manualCfm != null ? Number(v.manualCfm) : 0), 0);
-          const autoVents = supplies.filter(v => v.manualCfm == null);
-          const remCfm = Math.max(0, room.reqCfm - manualSum);
-          const perAuto = autoVents.length > 0 ? Math.round(remCfm / autoVents.length) : 0;
-          supplies.forEach(v => {
-            v.calcCfm = v.manualCfm != null ? Number(v.manualCfm) : perAuto;
-          });
+      function formatDimDisplay(ft) {
+        if (state.snapMode === '0.1in' || state.snapMode === '1in') {
+          return `${formatFt(ft)} ft (${formatFtIn(ft)})`;
         }
-
-        // Distribute Return CFM
-        if (returns.length > 0) {
-          const manualSum = returns.reduce((acc, v) => acc + (v.manualCfm != null ? Number(v.manualCfm) : 0), 0);
-          const autoVents = returns.filter(v => v.manualCfm == null);
-          const remCfm = Math.max(0, room.reqCfm - manualSum);
-          const perAuto = autoVents.length > 0 ? Math.round(remCfm / autoVents.length) : 0;
-          returns.forEach(v => {
-            v.calcCfm = v.manualCfm != null ? Number(v.manualCfm) : perAuto;
-          });
-        }
-
-        // Distribute Exhaust CFM to user-placed Exhaust Vents inside the room
-        if (exhausts.length > 0) {
-          const manualSum = exhausts.reduce((acc, v) => acc + (v.manualCfm != null ? Number(v.manualCfm) : 0), 0);
-          const autoVents = exhausts.filter(v => v.manualCfm == null);
-          const remCfm = Math.max(0, room.reqCfm - manualSum);
-          const perAuto = autoVents.length > 0 ? Math.round(remCfm / autoVents.length) : 0;
-          exhausts.forEach(v => {
-            v.calcCfm = v.manualCfm != null ? Number(v.manualCfm) : perAuto;
-          });
-        }
-      });
-
-      // Handle any standalone Exhaust / Supply / Return vents placed outside rooms
-      state.equipment.forEach(eq => {
-        if (eq.roomName === 'Unassigned' && eq.type !== 'ahu') {
-          eq.calcCfm = eq.manualCfm != null ? Number(eq.manualCfm) : 100; // Default 100 CFM spot vent
-        }
-      });
-
-      // C. Duct Network Graph & Downstream CFM Summation
-      // Build adjacency graph of duct endpoints (tolerance 0.25 ft so 0.5 ft snapped endpoints always match)
-      const ptKey = (x, y) => `${x.toFixed(1)},${y.toFixed(1)}`;
-
-      ['supply', 'return', 'exhaust'].forEach(sysType => {
-        const sysDucts = state.ducts.filter(d => d.sys === sysType);
-        sysDucts.forEach(d => { d.cfm = 0; });
-
-        if (sysDucts.length === 0) return;
-
-        // Map nodes -> connected duct ids
-        const adj = new Map();
-        const addEdge = (k, ductId) => {
-          if (!adj.has(k)) adj.set(k, []);
-          adj.get(k).push(ductId);
-        };
-        sysDucts.forEach(d => {
-          addEdge(ptKey(d.x1, d.y1), d.id);
-          addEdge(ptKey(d.x2, d.y2), d.id);
-        });
-
-        // Find root nodes (AHU locations or open exhaust termination nodes)
-        const ahus = state.equipment.filter(e => e.type === 'ahu');
-        const rootKeys = new Set();
-        ahus.forEach(a => {
-          const k = ptKey(a.x, a.y);
-          if (adj.has(k)) rootKeys.add(k);
-        });
-
-        // If no AHU connected (e.g., standalone exhaust fan run), pick an endpoint with degree 1 that has no vent attached
-        const ventType = sysType === 'supply' ? 'supply_vent' : (sysType === 'return' ? 'return_vent' : 'exhaust_vent');
-        const sysVents = state.equipment.filter(e => e.type === ventType);
-        const ventCfmAtNode = new Map();
-        sysVents.forEach(v => {
-          const k = ptKey(v.x, v.y);
-          ventCfmAtNode.set(k, (ventCfmAtNode.get(k) || 0) + v.calcCfm);
-        });
-
-        if (rootKeys.size === 0) {
-          for (const [k, edges] of adj.entries()) {
-            if (edges.length === 1 && !ventCfmAtNode.has(k)) {
-              rootKeys.add(k);
-              break;
-            }
+        return `${formatFt(ft)} ft`;
+      }
+// ... existing code ... -->
+      function recalculateSystem(opts = {}) {
+        try {
+// ... existing code ... -->
+          updateSummaryUI();
+          updateScheduleUI();
+          if (!opts.skipInspectorRebuild) {
+            updateInspectorUI();
           }
-          if (rootKeys.size === 0) {
-            // Fallback to first node
-            rootKeys.add(adj.keys().next().value);
+          render();
+          if (state.viewMode === '3d') {
+            rebuild3DScene();
           }
+        } catch (err) {
+          console.error('Calculation error:', err);
+          showToast('Calculation error — check inputs');
+        }
+      }
+// ... existing code ... -->
+          if (room.shape === 'rect') {
+            const topMid = worldToScreen(room.x + room.w / 2, room.y);
+            const leftMid = worldToScreen(room.x, room.y + room.h / 2);
+            ctx.fillText(`${formatFt(room.w)} ft`, topMid.x, topMid.y - 9);
+            ctx.save();
+            ctx.translate(leftMid.x - 10, leftMid.y);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText(`${formatFt(room.h)} ft`, 0, 0);
+            ctx.restore();
+          } else if (room.shape === 'circle') {
+            const topMid = worldToScreen(room.cx, room.cy - room.r);
+            ctx.fillText(`Ø ${formatFt(room.r * 2)} ft`, topMid.x, topMid.y - 9);
+          }
+// ... existing code ... -->
+          }
+          ctx.restore();
         }
 
-        // BFS from root(s) to orient tree and accumulate subtree CFM from leaves back to root
-        const visitedNodes = new Set();
-        const visitedDucts = new Set();
-        const parentDuctOfNode = new Map();
-        const nodeOrder = [];
-
-        const queue = Array.from(rootKeys);
-        queue.forEach(k => visitedNodes.add(k));
-
-        while (queue.length > 0) {
-          const curr = queue.shift();
-          nodeOrder.push(curr);
-          const connectedDuctIds = adj.get(curr) || [];
-          for (const dId of connectedDuctIds) {
-            if (visitedDucts.has(dId)) continue;
-            visitedDucts.add(dId);
-            const d = sysDucts.find(x => x.id === dId);
-            const k1 = ptKey(d.x1, d.y1);
-            const k2 = ptKey(d.x2, d.y2);
-            const nextNode = (k1 === curr) ? k2 : k1;
-            if (!visitedNodes.has(nextNode)) {
-              visitedNodes.add(nextNode);
-              parentDuctOfNode.set(nextNode, d);
-              queue.push(nextNode);
-            }
-          }
-        }
-
-        // Accumulate CFM bottom-up (reverse BFS order)
-        const nodeTotalCfm = new Map();
-        for (const [k, cfm] of ventCfmAtNode.entries()) {
-          nodeTotalCfm.set(k, cfm);
-        }
-
-        for (let i = nodeOrder.length - 1; i >= 0; i--) {
-          const nKey = nodeOrder[i];
-          const flow = nodeTotalCfm.get(nKey) || 0;
-          const pDuct = parentDuctOfNode.get(nKey);
-          if (pDuct) {
-            pDuct.cfm += flow;
-            const k1 = ptKey(pDuct.x1, pDuct.y1);
-            const k2 = ptKey(pDuct.x2, pDuct.y2);
-            const parentNode = (k1 === nKey) ? k2 : k1;
-            nodeTotalCfm.set(parentNode, (nodeTotalCfm.get(parentNode) || 0) + flow);
-          }
-        }
-
-        // Fallback for disconnected segments directly touching a vent
-        sysDucts.forEach(d => {
-          if (d.cfm === 0) {
-            const c1 = ventCfmAtNode.get(ptKey(d.x1, d.y1)) || 0;
-            const c2 = ventCfmAtNode.get(ptKey(d.x2, d.y2)) || 0;
-            d.cfm = Math.max(c1, c2);
-          }
-        });
-      });
-
-      // D. Duct Sizing, Velocity (FPM), and Static Pressure Drop (in. w.g.)
-      let maxVel = 0;
-      let maxDp = 0;
-
-      state.ducts.forEach(d => {
-        const lenFt = Math.hypot(d.x2 - d.x1, d.y2 - d.y1);
-        d.length = lenFt;
-        const q = Math.max(0, d.cfm);
-
-        // Find smallest standard diameter keeping V <= 800 FPM (unless manually overridden)
-        let diaIn = d.manualDia ? Number(d.manualDia) : 6;
-        if (!d.manualDia) {
-          if (q === 0) {
-            diaIn = 6;
+        // Live resize dimension tooltip while dragging a room handle
+        if (state.isDragging && state.dragTargetMeta && (state.dragMode === 'resize_rect' || state.dragMode === 'resize_circle')) {
+          const rm = state.dragTargetMeta.room;
+          let label = '';
+          let anchor = { x: 0, y: 0 };
+          if (state.dragMode === 'resize_rect') {
+            label = `${formatFt(rm.w)} × ${formatFt(rm.h)} ft  |  ${formatFtIn(rm.w)} × ${formatFtIn(rm.h)}`;
+            anchor = worldToScreen(rm.x + rm.w / 2, rm.y);
           } else {
-            for (const candidate of STD_ROUND_SIZES) {
-              const areaSqFt = Math.PI * Math.pow((candidate / 12) / 2, 2);
-              const vel = q / areaSqFt;
-              if (vel <= MAX_VELOCITY_FPM) {
-                diaIn = candidate;
-                break;
-              }
-              diaIn = candidate;
-            }
+            const dia = rm.r * 2;
+            label = `Ø ${formatFt(dia)} ft  |  ${formatFtIn(dia)}`;
+            anchor = worldToScreen(rm.cx, rm.cy - rm.r);
           }
-        }
-
-        d.eqDia = diaIn;
-        const areaSqFt = Math.PI * Math.pow((diaIn / 12) / 2, 2);
-        d.velocity = q > 0 ? Math.round(q / areaSqFt) : 0;
-
-        // ASHRAE friction loss per 100 ft: dp100 = 0.109136 * Q^1.9 / D^5.02
-        const effectiveLen = lenFt + 10; // +10 ft equivalent length for elbow/branch fittings
-        const dp100 = q > 0 ? (0.109136 * Math.pow(q, 1.9)) / Math.pow(diaIn, 5.02) : 0;
-        d.dp = dp100 * (effectiveLen / 100);
-
-        if (d.shape === 'rect') {
-          // Convert equivalent round diameter to rectangular W x H (even inches)
-          const aspect = d.aspect || 1.5;
-          const hIn = Math.max(6, Math.round((diaIn / Math.pow(aspect, 0.38)) / 2) * 2);
-          const wIn = Math.max(6, Math.round((hIn * aspect) / 2) * 2);
-          d.rectW = wIn;
-          d.rectH = hIn;
-          d.sizeLabel = `${wIn}"×${hIn}"`;
-        } else {
-          d.sizeLabel = `${diaIn}" Ø`;
-        }
-
-        if (d.velocity > maxVel) maxVel = d.velocity;
-        if (d.dp > maxDp) maxDp = d.dp;
-      });
-
-      // E. Update Top KPI Cards & Room Breakdown List
-      const totSupply = state.equipment.filter(e => e.type === 'supply_vent').reduce((s, e) => s + e.calcCfm, 0);
-      const totReturn = state.equipment.filter(e => e.type === 'return_vent').reduce((s, e) => s + e.calcCfm, 0);
-      const totExhaust = state.equipment.filter(e => e.type === 'exhaust_vent').reduce((s, e) => s + e.calcCfm, 0);
-
-      document.getElementById('kpi-supply').textContent = totSupply.toLocaleString();
-      document.getElementById('kpi-return').textContent = totReturn.toLocaleString();
-      document.getElementById('kpi-exhaust').textContent = totExhaust.toLocaleString();
-      document.getElementById('kpi-static').textContent = `${maxDp.toFixed(3)} in. w.g.`;
-
-      const badge = document.getElementById('sys-status-badge');
-      if (maxVel > MAX_VELOCITY_FPM || maxDp > MAX_STATIC_INWG) {
-        badge.textContent = maxVel > MAX_VELOCITY_FPM ? `WARN >${MAX_VELOCITY_FPM} FPM` : `WARN >${MAX_STATIC_INWG}" SP`;
-        badge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40';
-      } else {
-        badge.textContent = 'PASS ≤800 FPM';
-        badge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
-      }
-
-      renderRoomList();
-      renderInspector();
-      if (state.viewMode === '3d') rebuild3DScene();
-    }
-
-    // =========================================================================
-    // 4. INSPECTOR & ROOM LIST UI RENDERING
-    // =========================================================================
-    function renderRoomList() {
-      const list = document.getElementById('room-list');
-      if (state.rooms.length === 0) {
-        list.innerHTML = `<div class="text-xs text-slate-500 italic">No rooms drawn yet. Use the Room tool to define zones.</div>`;
-        return;
-      }
-
-      list.innerHTML = state.rooms.map(r => {
-        const isSelected = state.selected && state.selected.kind === 'room' && state.selected.id === r.id;
-        return `
-          <div onclick="selectItem('room', '${r.id}')" class="p-2.5 rounded-xl border cursor-pointer transition ${isSelected ? 'bg-sky-950/50 border-sky-500' : 'bg-slate-800/50 border-slate-800 hover:border-slate-700'}">
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-semibold text-white">${r.name}</span>
-              <span class="mono text-xs font-bold text-sky-400">${r.reqCfm} CFM</span>
-            </div>
-            <div class="text-[11px] text-slate-400 mt-1 flex items-center justify-between mono">
-              <span>${r.width}×${r.length}×${r.ceiling}ft</span>
-              <span>${r.volume.toLocaleString()} ft³ • ${r.ach} ACH</span>
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
-
-    function selectItem(kind, id) {
-      state.selected = id ? { kind, id } : null;
-      renderRoomList();
-      renderInspector();
-      draw2D();
-    }
-
-    function renderInspector() {
-      const emptyBox = document.getElementById('inspector-empty');
-      const contentBox = document.getElementById('inspector-content');
-
-      if (!state.selected) {
-        emptyBox.classList.remove('hidden');
-        contentBox.classList.add('hidden');
-        return;
-      }
-
-      const { kind, id } = state.selected;
-      let item = null;
-      if (kind === 'room') item = state.rooms.find(x => x.id === id);
-      if (kind === 'equipment') item = state.equipment.find(x => x.id === id);
-      if (kind === 'duct') item = state.ducts.find(x => x.id === id);
-      if (kind === 'pipe') item = state.pipes.find(x => x.id === id);
-
-      if (!item) {
-        state.selected = null;
-        emptyBox.classList.remove('hidden');
-        contentBox.classList.add('hidden');
-        return;
-      }
-
-      emptyBox.classList.add('hidden');
-      contentBox.classList.remove('hidden');
-
-      if (kind === 'room') {
-        contentBox.innerHTML = `
-          <div class="bg-slate-800/70 border border-slate-700 rounded-xl p-3 space-y-2.5">
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-bold uppercase text-sky-400">Room Zone</span>
-              <button onclick="deleteSelected()" class="text-[11px] text-rose-400 hover:underline">Delete</button>
-            </div>
-            <div>
-              <label class="block text-[11px] text-slate-400 mb-1">Room Name</label>
-              <input id="insp-room-name" type="text" value="${item.name}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white">
-            </div>
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <label class="block text-[11px] text-slate-400 mb-1">ASHRAE ACH</label>
-                <input id="insp-room-ach" type="number" step="1" min="1" value="${item.ach}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white mono">
-              </div>
-              <div>
-                <label class="block text-[11px] text-slate-400 mb-1">Ceiling Ht (ft)</label>
-                <input id="insp-room-ceil" type="number" step="0.5" min="7" value="${item.ceiling}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white mono">
-              </div>
-            </div>
-            <div class="bg-slate-950/70 rounded-lg p-2.5 border border-slate-800 text-xs space-y-1 mono">
-              <div class="flex justify-between"><span class="text-slate-400">Dimensions:</span><span>${item.width} ft × ${item.length} ft</span></div>
-              <div class="flex justify-between"><span class="text-slate-400">Volume (×${item.ceiling}ft):</span><span>${item.volume.toLocaleString()} ft³</span></div>
-              <div class="flex justify-between text-sky-400 font-bold"><span>Required Airflow:</span><span>${item.reqCfm} CFM</span></div>
-            </div>
-          </div>
-        `;
-        document.getElementById('insp-room-name').oninput = e => { item.name = e.target.value; recalculateAll(); };
-        document.getElementById('insp-room-ach').oninput = e => { item.ach = parseFloat(e.target.value) || 6; recalculateAll(); draw2D(); };
-        document.getElementById('insp-room-ceil').oninput = e => { item.ceiling = parseFloat(e.target.value) || 10; recalculateAll(); draw2D(); };
-      }
-
-      if (kind === 'equipment') {
-        const typeNames = {
-          ahu: 'Air Handling Unit (AHU)',
-          supply_vent: 'Supply Diffuser',
-          return_vent: 'Return Air Grille',
-          exhaust_vent: 'Exhaust Vent (User-Placed)'
-        };
-        const isVent = item.type !== 'ahu';
-        contentBox.innerHTML = `
-          <div class="bg-slate-800/70 border border-slate-700 rounded-xl p-3 space-y-2.5">
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-bold uppercase text-amber-400">${typeNames[item.type]}</span>
-              <button onclick="deleteSelected()" class="text-[11px] text-rose-400 hover:underline">Delete</button>
-            </div>
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <label class="block text-[11px] text-slate-400 mb-1">X Pos (0.5ft)</label>
-                <input id="insp-eq-x" type="number" step="0.5" value="${item.x}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white mono">
-              </div>
-              <div>
-                <label class="block text-[11px] text-slate-400 mb-1">Y Pos (0.5ft)</label>
-                <input id="insp-eq-y" type="number" step="0.5" value="${item.y}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white mono">
-              </div>
-            </div>
-            ${isVent ? `
-              <div>
-                <label class="block text-[11px] text-slate-400 mb-1">Manual CFM Override (blank = Auto Room Share)</label>
-                <input id="insp-eq-cfm" type="number" step="10" placeholder="Auto (${item.calcCfm} CFM)" value="${item.manualCfm != null ? item.manualCfm : ''}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white mono">
-              </div>
-              <div class="bg-slate-950/70 rounded-lg p-2.5 border border-slate-800 text-xs space-y-1 mono">
-                <div class="flex justify-between"><span class="text-slate-400">Assigned Zone:</span><span class="text-slate-200">${item.roomName}</span></div>
-                <div class="flex justify-between text-sky-400 font-bold"><span>Active Airflow:</span><span>${item.calcCfm} CFM</span></div>
-              </div>
-            ` : `
-              <div class="text-[11px] text-slate-400 bg-slate-950/60 p-2 rounded-lg border border-slate-800">
-                Connect Supply, Return, or Exhaust ducts directly to <span class="mono text-slate-200">(${item.x}, ${item.y})</span> to aggregate total system CFM.
-              </div>
-            `}
-          </div>
-        `;
-        document.getElementById('insp-eq-x').onchange = e => { item.x = snapHalf(parseFloat(e.target.value) || 0); recalculateAll(); draw2D(); };
-        document.getElementById('insp-eq-y').onchange = e => { item.y = snapHalf(parseFloat(e.target.value) || 0); recalculateAll(); draw2D(); };
-        if (isVent) {
-          document.getElementById('insp-eq-cfm').oninput = e => {
-            const val = e.target.value.trim();
-            item.manualCfm = val === '' ? null : Math.max(0, parseFloat(val) || 0);
-            recalculateAll();
-            draw2D();
-          };
-        }
-      }
-
-      if (kind === 'duct') {
-        const velWarn = item.velocity > MAX_VELOCITY_FPM;
-        const dpWarn = item.dp > MAX_STATIC_INWG;
-        contentBox.innerHTML = `
-          <div class="bg-slate-800/70 border border-slate-700 rounded-xl p-3 space-y-2.5">
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-bold uppercase text-cyan-400">Duct Segment</span>
-              <button onclick="deleteSelected()" class="text-[11px] text-rose-400 hover:underline">Delete</button>
-            </div>
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <label class="block text-[11px] text-slate-400 mb-1">System</label>
-                <select id="insp-duct-sys" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white">
-                  <option value="supply" ${item.sys==='supply'?'selected':''}>Supply</option>
-                  <option value="return" ${item.sys==='return'?'selected':''}>Return</option>
-                  <option value="exhaust" ${item.sys==='exhaust'?'selected':''}>Exhaust</option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-[11px] text-slate-400 mb-1">Profile</label>
-                <select id="insp-duct-shape" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white">
-                  <option value="round" ${item.shape==='round'?'selected':''}>Round Ø</option>
-                  <option value="rect" ${item.shape==='rect'?'selected':''}>Rect W×H</option>
-                </select>
-              </div>
-            </div>
-            <div>
-              <label class="block text-[11px] text-slate-400 mb-1">Diameter Override (in) — Blank = Auto ≤800 FPM</label>
-              <select id="insp-duct-dia" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white mono">
-                <option value="">Auto-Size (${item.eqDia}" eq)</option>
-                ${STD_ROUND_SIZES.map(s => `<option value="${s}" ${item.manualDia == s ? 'selected' : ''}>${s}" Standard</option>`).join('')}
-              </select>
-            </div>
-            <div class="bg-slate-950/70 rounded-lg p-2.5 border border-slate-800 text-xs space-y-1 mono">
-              <div class="flex justify-between"><span class="text-slate-400">Length:</span><span>${item.length.toFixed(1)} ft</span></div>
-              <div class="flex justify-between"><span class="text-slate-400">Airflow:</span><span class="text-white font-semibold">${item.cfm} CFM</span></div>
-              <div class="flex justify-between"><span class="text-slate-400">Sized Duct:</span><span class="text-cyan-300 font-bold">${item.sizeLabel}</span></div>
-              <div class="flex justify-between ${velWarn ? 'text-rose-400 font-bold' : 'text-emerald-400'}">
-                <span>Velocity:</span><span>${item.velocity} FPM ${velWarn ? '(!)' : ''}</span>
-              </div>
-              <div class="flex justify-between ${dpWarn ? 'text-rose-400 font-bold' : 'text-slate-200'}">
-                <span>Friction Loss:</span><span>${item.dp.toFixed(3)} in. w.g.</span>
-              </div>
-            </div>
-          </div>
-        `;
-        document.getElementById('insp-duct-sys').onchange = e => { item.sys = e.target.value; recalculateAll(); draw2D(); };
-        document.getElementById('insp-duct-shape').onchange = e => { item.shape = e.target.value; recalculateAll(); draw2D(); };
-        document.getElementById('insp-duct-dia').onchange = e => {
-          item.manualDia = e.target.value === '' ? null : Number(e.target.value);
-          recalculateAll();
-          draw2D();
-        };
-      }
-
-      if (kind === 'pipe') {
-        contentBox.innerHTML = `
-          <div class="bg-slate-800/70 border border-slate-700 rounded-xl p-3 space-y-2.5">
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-bold uppercase text-indigo-400">Plumbing Line</span>
-              <button onclick="deleteSelected()" class="text-[11px] text-rose-400 hover:underline">Delete</button>
-            </div>
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <label class="block text-[11px] text-slate-400 mb-1">Service</label>
-                <select id="insp-pipe-sys" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white">
-                  <option value="cw" ${item.sys==='cw'?'selected':''}>Cold Water</option>
-                  <option value="hw" ${item.sys==='hw'?'selected':''}>Hot Water</option>
-                  <option value="dwv" ${item.sys==='dwv'?'selected':''}>Drain / DWV</option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-[11px] text-slate-400 mb-1">Elevation (ft)</label>
-                <input id="insp-pipe-elev" type="number" step="0.5" value="${item.elev}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white mono">
-              </div>
-            </div>
-          </div>
-        `;
-        document.getElementById('insp-pipe-sys').onchange = e => { item.sys = e.target.value; draw2D(); if (state.viewMode==='3d') rebuild3DScene(); };
-        document.getElementById('insp-pipe-elev').onchange = e => { item.elev = parseFloat(e.target.value) || 9.0; if (state.viewMode==='3d') rebuild3DScene(); };
-      }
-    }
-
-    function deleteSelected() {
-      if (!state.selected) return;
-      const { kind, id } = state.selected;
-      if (kind === 'room') state.rooms = state.rooms.filter(x => x.id !== id);
-      if (kind === 'equipment') state.equipment = state.equipment.filter(x => x.id !== id);
-      if (kind === 'duct') state.ducts = state.ducts.filter(x => x.id !== id);
-      if (kind === 'pipe') state.pipes = state.pipes.filter(x => x.id !== id);
-      state.selected = null;
-      recalculateAll();
-      draw2D();
-      showToast('Element removed');
-    }
-
-    // =========================================================================
-    // 5. 2D CAD CANVAS RENDERER & INTERACTION (0.5 FT GRID SNAPPING)
-    // =========================================================================
-    const canvas = document.getElementById('cad-canvas');
-    const ctx = canvas.getContext('2d');
-
-    function resizeCanvas() {
-      const wrap = document.getElementById('view-2d-wrap');
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = wrap.clientWidth * dpr;
-      canvas.height = wrap.clientHeight * dpr;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      draw2D();
-    }
-    window.addEventListener('resize', resizeCanvas);
-
-    // Coordinate transforms: World Feet <-> Screen Pixels
-    function w2sX(ftX) { return state.camera.x + ftX * state.camera.pxPerFt; }
-    function w2sY(ftY) { return state.camera.y + ftY * state.camera.pxPerFt; }
-    function s2wX(pxX) { return (pxX - state.camera.x) / state.camera.pxPerFt; }
-    function s2wY(pxY) { return (pxY - state.camera.y) / state.camera.pxPerFt; }
-
-    function draw2D() {
-      const w = canvas.clientWidth;
-      const h = canvas.clientHeight;
-      ctx.clearRect(0, 0, w, h);
-
-      const ppm = state.camera.pxPerFt;
-      const halfStepPx = ppm * GRID_SNAP; // 0.5 ft step in pixels
-
-      // 1. Draw 0.5-ft Minor Grid & 5.0-ft Major Grid
-      const startFtX = Math.floor(s2wX(0) * 2) / 2;
-      const endFtX   = Math.ceil(s2wX(w) * 2) / 2;
-      const startFtY = Math.floor(s2wY(0) * 2) / 2;
-      const endFtY   = Math.ceil(s2wY(h) * 2) / 2;
-
-      // Only draw 0.5ft sub-grid lines when zoomed in enough to remain crisp
-      if (halfStepPx >= 7) {
-        ctx.beginPath();
-        ctx.strokeStyle = 'rgba(30, 41, 59, 0.45)';
-        ctx.lineWidth = 1;
-        for (let fx = startFtX; fx <= endFtX; fx += 0.5) {
-          if (Math.abs(fx % 5) < 0.01) continue;
-          const sx = Math.round(w2sX(fx)) + 0.5;
-          ctx.moveTo(sx, 0);
-          ctx.lineTo(sx, h);
-        }
-        for (let fy = startFtY; fy <= endFtY; fy += 0.5) {
-          if (Math.abs(fy % 5) < 0.01) continue;
-          const sy = Math.round(w2sY(fy)) + 0.5;
-          ctx.moveTo(0, sy);
-          ctx.lineTo(w, sy);
-        }
-        ctx.stroke();
-      }
-
-      // Major 5-foot grid lines
-      ctx.beginPath();
-      ctx.strokeStyle = 'rgba(51, 65, 85, 0.75)';
-      ctx.lineWidth = 1;
-      for (let fx = Math.floor(startFtX / 5) * 5; fx <= endFtX; fx += 5) {
-        const sx = Math.round(w2sX(fx)) + 0.5;
-        ctx.moveTo(sx, 0);
-        ctx.lineTo(sx, h);
-      }
-      for (let fy = Math.floor(startFtY / 5) * 5; fy <= endFtY; fy += 5) {
-        const sy = Math.round(w2sY(fy)) + 0.5;
-        ctx.moveTo(0, sy);
-        ctx.lineTo(w, sy);
-      }
-      ctx.stroke();
-
-      // Origin axes
-      ctx.beginPath();
-      ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
-      ctx.lineWidth = 1.5;
-      ctx.moveTo(w2sX(0), 0); ctx.lineTo(w2sX(0), h);
-      ctx.moveTo(0, w2sY(0)); ctx.lineTo(w, w2sY(0));
-      ctx.stroke();
-
-      // 2. Draw Rooms (with 10ft Ceiling Volume & CFM badges)
-      state.rooms.forEach(r => {
-        const x = w2sX(Math.min(r.x1, r.x2));
-        const y = w2sY(Math.min(r.y1, r.y2));
-        const rw = Math.abs(r.x2 - r.x1) * ppm;
-        const rh = Math.abs(r.y2 - r.y1) * ppm;
-        const isSel = state.selected && state.selected.kind === 'room' && state.selected.id === r.id;
-
-        ctx.fillStyle = r.color || 'rgba(56, 189, 248, 0.07)';
-        ctx.fillRect(x, y, rw, rh);
-
-        ctx.lineWidth = isSel ? 2.5 : 1.75;
-        ctx.strokeStyle = isSel ? '#facc15' : (r.border || '#38bdf8');
-        ctx.strokeRect(x, y, rw, rh);
-
-        // Room label & 10ft ceiling CFM callout
-        if (rw > 45 && rh > 30) {
-          ctx.fillStyle = '#f8fafc';
-          ctx.font = '600 12px Inter, sans-serif';
-          ctx.fillText(r.name, x + 8, y + 18);
-
-          ctx.fillStyle = '#94a3b8';
-          ctx.font = '11px JetBrains Mono, monospace';
-          ctx.fillText(`${r.width}×${r.length}×${r.ceiling}ft (${r.volume} ft³)`, x + 8, y + 33);
-
-          ctx.fillStyle = '#38bdf8';
-          ctx.font = '600 11px JetBrains Mono, monospace';
-          ctx.fillText(`${r.reqCfm} CFM @ ${r.ach} ACH`, x + 8, y + 48);
-        }
-      });
-
-      // 3. Draw Plumbing Pipes
-      state.pipes.forEach(p => {
-        const x1 = w2sX(p.x1), y1 = w2sY(p.y1);
-        const x2 = w2sX(p.x2), y2 = w2sY(p.y2);
-        const isSel = state.selected && state.selected.kind === 'pipe' && state.selected.id === p.id;
-        const cfg = SYSTEM_COLORS[p.sys] || SYSTEM_COLORS.cw;
-
-        ctx.save();
-        ctx.beginPath();
-        ctx.setLineDash([6, 4]);
-        ctx.strokeStyle = isSel ? '#facc15' : cfg.stroke;
-        ctx.lineWidth = isSel ? 3.5 : 2.5;
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.stroke();
-        ctx.restore();
-      });
-
-      // 4. Draw HVAC Ducts
-      state.ducts.forEach(d => {
-        const x1 = w2sX(d.x1), y1 = w2sY(d.y1);
-        const x2 = w2sX(d.x2), y2 = w2sY(d.y2);
-        const isSel = state.selected && state.selected.kind === 'duct' && state.selected.id === d.id;
-        const cfg = SYSTEM_COLORS[d.sys] || SYSTEM_COLORS.supply;
-        const overLimit = d.velocity > MAX_VELOCITY_FPM || d.dp > MAX_STATIC_INWG;
-
-        // Visual thickness scaled subtly by duct diameter
-        const visualThick = Math.max(4, Math.min(18, (d.eqDia / 24) * ppm * 0.7));
-
-        ctx.save();
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.strokeStyle = isSel ? '#facc15' : (overLimit ? '#f43f5e' : cfg.stroke);
-        ctx.lineWidth = visualThick;
-        ctx.globalAlpha = 0.85;
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.stroke();
-
-        // Centerline
-        ctx.beginPath();
-        ctx.strokeStyle = '#0f172a';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([4, 4]);
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.stroke();
-        ctx.restore();
-
-        // Joint nodes at endpoints
-        [{ x: x1, y: y1 }, { x: x2, y: y2 }].forEach(pt => {
+          ctx.save();
+          ctx.font = '600 11px "JetBrains Mono", monospace';
+          const tw = ctx.measureText(label).width + 14;
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+          ctx.strokeStyle = '#fbbf24';
+          ctx.lineWidth = 1.25;
           ctx.beginPath();
-          ctx.fillStyle = '#f8fafc';
-          ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
-          ctx.fill();
-        });
-
-        // Midpoint Sizing Pill Badge
-        const mx = (x1 + x2) / 2;
-        const my = (y1 + y2) / 2;
-        if (d.length >= 1.5) {
-          const badgeText = `${d.sizeLabel} • ${d.cfm} CFM`;
-          ctx.font = '600 10px JetBrains Mono, monospace';
-          const tw = ctx.measureText(badgeText).width + 10;
-          ctx.fillStyle = overLimit ? 'rgba(136, 19, 55, 0.92)' : 'rgba(15, 23, 42, 0.9)';
-          ctx.strokeStyle = isSel ? '#facc15' : (overLimit ? '#fb7185' : '#334155');
-          ctx.lineWidth = 1;
-          roundRect(ctx, mx - tw / 2, my - 9, tw, 18, 5);
+          ctx.roundRect(anchor.x - tw / 2, anchor.y - 34, tw, 20, 5);
           ctx.fill();
           ctx.stroke();
-
-          ctx.fillStyle = overLimit ? '#fecdd3' : '#e2e8f0';
+          ctx.fillStyle = '#fef08a';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(badgeText, mx, my);
-          ctx.textAlign = 'left';
-          ctx.textBaseline = 'alphabetic';
+          ctx.fillText(label, anchor.x, anchor.y - 24);
+          ctx.restore();
         }
-      });
-
-      // 5. Draw Equipment (AHU, Supply Diffusers, Return Grilles, User-Placed Exhaust Vents)
-      state.equipment.forEach(eq => {
-        const sx = w2sX(eq.x);
-        const sy = w2sY(eq.y);
-        const isSel = state.selected && state.selected.kind === 'equipment' && state.selected.id === eq.id;
-
-        ctx.save();
-        if (eq.type === 'ahu') {
-          const sz = Math.max(24, ppm * 1.4);
-          ctx.fillStyle = '#1e293b';
-          ctx.strokeStyle = isSel ? '#facc15' : '#f59e0b';
-          ctx.lineWidth = isSel ? 3 : 2;
-          roundRect(ctx, sx - sz / 2, sy - sz / 2, sz, sz, 6);
-          ctx.fill();
-          ctx.stroke();
-
-          ctx.fillStyle = '#fbbf24';
-          ctx.font = 'bold 10px JetBrains Mono, monospace';
+      }
+// ... existing code ... -->
+          ctx.fillStyle = '#e0f2fe';
+          ctx.font = '600 11px "JetBrains Mono", monospace';
           ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText('AHU', sx, sy);
-        } else {
-          const r = 10;
-          let color = '#38bdf8';
-          if (eq.type === 'return_vent') color = '#34d399';
-          if (eq.type === 'exhaust_vent') color = '#fb7185';
-
-          ctx.fillStyle = '#0f172a';
-          ctx.strokeStyle = isSel ? '#facc15' : color;
-          ctx.lineWidth = isSel ? 2.5 : 2;
-
-          if (eq.type === 'exhaust_vent') {
-            // Distinct circular fan/exhaust symbol
-            ctx.beginPath();
-            ctx.arc(sx, sy, r, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(sx - 6, sy - 6); ctx.lineTo(sx + 6, sy + 6);
-            ctx.moveTo(sx + 6, sy - 6); ctx.lineTo(sx - 6, sy + 6);
-            ctx.stroke();
-          } else if (eq.type === 'supply_vent') {
-            // Square 4-way supply diffuser
-            ctx.fillRect(sx - r, sy - r, r * 2, r * 2);
-            ctx.strokeRect(sx - r, sy - r, r * 2, r * 2);
-            ctx.beginPath();
-            ctx.moveTo(sx - r, sy - r); ctx.lineTo(sx + r, sy + r);
-            ctx.moveTo(sx + r, sy - r); ctx.lineTo(sx - r, sy + r);
-            ctx.stroke();
-          } else {
-            // Return grille with louvers
-            ctx.fillRect(sx - r, sy - r, r * 2, r * 2);
-            ctx.strokeRect(sx - r, sy - r, r * 2, r * 2);
-            ctx.beginPath();
-            ctx.moveTo(sx - r + 3, sy - 4); ctx.lineTo(sx + r - 3, sy - 4);
-            ctx.moveTo(sx - r + 3, sy);     ctx.lineTo(sx + r - 3, sy);
-            ctx.moveTo(sx - r + 3, sy + 4); ctx.lineTo(sx + r - 3, sy + 4);
-            ctx.stroke();
-          }
-
-          // CFM label below vent
-          ctx.fillStyle = color;
-          ctx.font = '600 10px JetBrains Mono, monospace';
-          ctx.textAlign = 'center';
-          const tag = eq.type === 'exhaust_vent' ? `EXH ${eq.calcCfm}` : `${eq.calcCfm}`;
-          ctx.fillText(tag, sx, sy + r + 11);
+          ctx.fillText(
+            `${formatFt(w)} × ${formatFt(h)} ft (${formatFtIn(w)} × ${formatFtIn(h)}) • ${Math.round(w * h)} ft²`,
+            p.x + (w * state.zoom) / 2,
+            p.y - 12
+          );
+          ctx.restore();
         }
-        ctx.restore();
-      });
 
-      // 6. Active Drawing Preview (Room / Duct / Pipe)
-      if (state.pointer.activeDraw) {
-        const d = state.pointer.activeDraw;
-        const x1 = w2sX(d.x1), y1 = w2sY(d.y1);
-        const x2 = w2sX(state.pointer.snapX), y2 = w2sY(state.pointer.snapY);
-
-        ctx.save();
-        if (d.kind === 'room') {
-          const rx = Math.min(x1, x2), ry = Math.min(y1, y2);
-          const rw = Math.abs(x2 - x1), rh = Math.abs(y2 - y1);
+        if (state.draftCircle) {
+          const c = state.draftCircle;
+          const s = worldToScreen(c.cx, c.cy);
+          ctx.save();
+          ctx.setLineDash([5, 4]);
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, c.r * state.zoom, 0, Math.PI * 2);
           ctx.fillStyle = 'rgba(56, 189, 248, 0.14)';
+          ctx.fill();
           ctx.strokeStyle = '#38bdf8';
           ctx.lineWidth = 2;
-          ctx.setLineDash([6, 4]);
-          ctx.fillRect(rx, ry, rw, rh);
-          ctx.strokeRect(rx, ry, rw, rh);
-        } else {
-          ctx.strokeStyle = '#facc15';
-          ctx.lineWidth = 3;
-          ctx.setLineDash([6, 4]);
-          ctx.beginPath();
-          ctx.moveTo(x1, y1);
-          ctx.lineTo(x2, y2);
           ctx.stroke();
+          ctx.setLineDash([]);
+
+          ctx.fillStyle = '#e0f2fe';
+          ctx.font = '600 11px "JetBrains Mono", monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText(
+            `Ø ${formatFt(c.r * 2)} ft (${formatFtIn(c.r * 2)})`,
+            s.x,
+            s.y - c.r * state.zoom - 12
+          );
+          ctx.restore();
         }
-        ctx.restore();
-      }
+// ... existing code ... -->
+        if (mode === '3d') {
+          cancelDraft();
+          quickRoomBar.classList.add('hidden');
+          canvas.classList.add('hidden');
+// ... existing code ... -->
+          btnView2D.className = 'px-3 py-1 rounded-md text-xs font-semibold transition bg-indigo-600 text-white shadow flex items-center gap-1.5';
+          btnView3D.className = 'px-3 py-1 rounded-md text-xs font-semibold transition text-slate-300 hover:text-white flex items-center gap-1.5';
+          toolHintText.textContent = TOOL_HINTS[state.tool] || '';
+          updateQuickRoomBarVisibility();
 
-      // 7. 0.5-Foot Snap Crosshair Indicator
-      const cx = w2sX(state.pointer.snapX);
-      const cy = w2sY(state.pointer.snapY);
-      ctx.save();
-      ctx.strokeStyle = '#facc15';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(cx, cy, 4.5, 0, Math.PI * 2);
-      ctx.moveTo(cx - 9, cy); ctx.lineTo(cx + 9, cy);
-      ctx.moveTo(cx, cy - 9); ctx.lineTo(cx, cy + 9);
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    function roundRect(ctx, x, y, width, height, radius) {
-      ctx.beginPath();
-      ctx.moveTo(x + radius, y);
-      ctx.lineTo(x + width - radius, y);
-      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-      ctx.lineTo(x + width, y + height - radius);
-      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-      ctx.lineTo(x + radius, y + height);
-      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-      ctx.lineTo(x, y + radius);
-      ctx.quadraticCurveTo(x, y, x + radius, y);
-      ctx.closePath();
-    }
-
-    // =========================================================================
-    // 6. POINTER & HIT-TESTING EVENTS (MOUSE + TOUCH SUPPORT)
-    // =========================================================================
-    function distToSegment(px, py, x1, y1, x2, y2) {
-      const l2 = (x2 - x1) ** 2 + (y2 - y1) ** 2;
-      if (l2 === 0) return Math.hypot(px - x1, py - y1);
-      let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
-      t = Math.max(0, Math.min(1, t));
-      return Math.hypot(px - (x1 + t * (x2 - x1)), py - (y1 + t * (y2 - y1)));
-    }
-
-    function hitTest(ftX, ftY) {
-      const tol = 0.65; // ft tolerance
-      // 1. Equipment
-      for (let i = state.equipment.length - 1; i >= 0; i--) {
-        const eq = state.equipment[i];
-        if (Math.hypot(ftX - eq.x, ftY - eq.y) <= tol) return { kind: 'equipment', id: eq.id, item: eq };
-      }
-      // 2. Ducts
-      for (let i = state.ducts.length - 1; i >= 0; i--) {
-        const d = state.ducts[i];
-        if (distToSegment(ftX, ftY, d.x1, d.y1, d.x2, d.y2) <= tol) return { kind: 'duct', id: d.id, item: d };
-      }
-      // 3. Pipes
-      for (let i = state.pipes.length - 1; i >= 0; i--) {
-        const p = state.pipes[i];
-        if (distToSegment(ftX, ftY, p.x1, p.y1, p.x2, p.y2) <= tol) return { kind: 'pipe', id: p.id, item: p };
-      }
-      // 4. Rooms (border or interior)
-      for (let i = state.rooms.length - 1; i >= 0; i--) {
-        const r = state.rooms[i];
-        const minX = Math.min(r.x1, r.x2), maxX = Math.max(r.x1, r.x2);
-        const minY = Math.min(r.y1, r.y2), maxY = Math.max(r.y1, r.y2);
-        if (ftX >= minX && ftX <= maxX && ftY >= minY && ftY <= maxY) {
-          return { kind: 'room', id: r.id, item: r };
+          resizeCanvas();
+          render();
         }
       }
-      return null;
-    }
-
-    function updatePointerCoords(clientX, clientY) {
-      const rect = canvas.getBoundingClientRect();
-      const px = clientX - rect.left;
-      const py = clientY - rect.top;
-      state.pointer.rawX = s2wX(px);
-      state.pointer.rawY = s2wY(py);
-      state.pointer.snapX = snapHalf(state.pointer.rawX);
-      state.pointer.snapY = snapHalf(state.pointer.rawY);
-
-      document.getElementById('hud-coords').textContent = `${state.pointer.snapX.toFixed(1)}, ${state.pointer.snapY.toFixed(1)} ft`;
-
-      const measureWrap = document.getElementById('hud-measure-wrap');
-      if (state.pointer.activeDraw) {
-        const ad = state.pointer.activeDraw;
-        const dx = Math.abs(state.pointer.snapX - ad.x1);
-        const dy = Math.abs(state.pointer.snapY - ad.y1);
-        measureWrap.classList.remove('hidden');
-        if (ad.kind === 'room') {
-          document.getElementById('hud-measure').textContent = `${dx.toFixed(1)}×${dy.toFixed(1)} ft (${(dx * dy * 10).toFixed(0)} ft³)`;
-        } else {
-          const len = Math.hypot(dx, dy);
-          document.getElementById('hud-measure').textContent = `${len.toFixed(1)} ft`;
-        }
-      } else {
-        measureWrap.classList.add('hidden');
-      }
-    }
-
-    canvas.addEventListener('pointerdown', e => {
-      canvas.setPointerCapture(e.pointerId);
-      updatePointerCoords(e.clientX, e.clientY);
-      state.pointer.isDown = true;
-
-      // Middle click or Shift+Click -> Pan
-      if (e.button === 1 || e.shiftKey) {
-        state.pointer.isPanning = true;
-        state.pointer.panStartX = e.clientX - state.camera.x;
-        state.pointer.panStartY = e.clientY - state.camera.y;
-        return;
-      }
-
-      const sx = state.pointer.snapX;
-      const sy = state.pointer.snapY;
-      const tool = state.tool;
-
-      if (tool === 'select') {
-        const hit = hitTest(state.pointer.rawX, state.pointer.rawY);
-        if (hit) {
-          selectItem(hit.kind, hit.id);
-          state.pointer.dragStartSnapX = sx;
-          state.pointer.dragStartSnapY = sy;
-          state.pointer.dragOrig = JSON.parse(JSON.stringify(hit.item));
-        } else {
-          selectItem(null, null);
-          // Pan when dragging empty background in select mode
-          state.pointer.isPanning = true;
-          state.pointer.panStartX = e.clientX - state.camera.x;
-          state.pointer.panStartY = e.clientY - state.camera.y;
-        }
-        return;
-      }
-
-      if (tool === 'ahu' || tool === 'supply_vent' || tool === 'return_vent' || tool === 'exhaust_vent') {
-        const newEq = {
-          id: uid('eq'),
-          type: tool,
-          x: sx,
-          y: sy,
-          manualCfm: null,
-          calcCfm: 0
-        };
-        state.equipment.push(newEq);
-        selectItem('equipment', newEq.id);
-        recalculateAll();
-        draw2D();
-        return;
-      }
-
-      if (tool === 'room' || tool === 'duct' || tool === 'pipe') {
-        state.pointer.activeDraw = { kind: tool, x1: sx, y1: sy };
-        draw2D();
-      }
-    });
-
-    canvas.addEventListener('pointermove', e => {
-      updatePointerCoords(e.clientX, e.clientY);
-
-      if (state.pointer.isPanning) {
-        state.camera.x = e.clientX - state.pointer.panStartX;
-        state.camera.y = e.clientY - state.pointer.panStartY;
-        draw2D();
-        return;
-      }
-
-      // Drag selected element on 0.5-ft grid
-      if (state.pointer.isDown && state.tool === 'select' && state.selected && state.pointer.dragOrig) {
-        const dx = snapHalf(state.pointer.snapX - state.pointer.dragStartSnapX);
-        const dy = snapHalf(state.pointer.snapY - state.pointer.dragStartSnapY);
-        const orig = state.pointer.dragOrig;
-        const { kind, id } = state.selected;
-
-        if (kind === 'equipment') {
-          const item = state.equipment.find(x => x.id === id);
-          if (item) { item.x = snapHalf(orig.x + dx); item.y = snapHalf(orig.y + dy); }
-        } else if (kind === 'room') {
-          const item = state.rooms.find(x => x.id === id);
-          if (item) {
-            item.x1 = snapHalf(orig.x1 + dx); item.y1 = snapHalf(orig.y1 + dy);
-            item.x2 = snapHalf(orig.x2 + dx); item.y2 = snapHalf(orig.y2 + dy);
+// ... existing code ... -->
+      canvas.addEventListener('pointermove', (e) => {
+        const sp = getEventScreenPos(e);
+        const wp = screenToWorld(sp.x, sp.y);
+        state.mouseWorld = wp;
+        hudX.textContent = state.snapMode === '0.1in' ? formatFtIn(snapVal(wp.x)) : wp.x.toFixed(1);
+        hudY.textContent = state.snapMode === '0.1in' ? formatFtIn(snapVal(wp.y)) : wp.y.toFixed(1);
+// ... existing code ... -->
+        } else if (state.dragMode === 'draw_circle') {
+          state.draftCircle.r = Math.max(0.5, snapVal(dist({ x: state.draftCircle.cx, y: state.draftCircle.cy }, wp)));
+          render();
+        } else if (state.dragMode === 'move_room') {
+// ... existing code ... -->
+        } else if (state.dragMode === 'resize_rect') {
+          const { room, cornerIdx } = state.dragTargetMeta;
+          const sx = snapVal(wp.x), sy = snapVal(wp.y);
+          const right = room.x + room.w, bottom = room.y + room.h;
+          if (cornerIdx === 0) {
+            if (right - sx >= 0.5) { room.w = right - sx; room.x = sx; }
+            if (bottom - sy >= 0.5) { room.h = bottom - sy; room.y = sy; }
+          } else if (cornerIdx === 1) {
+            if (sx - room.x >= 0.5) room.w = sx - room.x;
+            if (bottom - sy >= 0.5) { room.h = bottom - sy; room.y = sy; }
+          } else if (cornerIdx === 2) {
+            if (sx - room.x >= 0.5) room.w = sx - room.x;
+            if (sy - room.y >= 0.5) room.h = sy - room.y;
+          } else if (cornerIdx === 3) {
+            if (right - sx >= 0.5) { room.w = right - sx; room.x = sx; }
+            if (sy - room.y >= 0.5) room.h = sy - room.y;
           }
-        } else if (kind === 'duct') {
-          const item = state.ducts.find(x => x.id === id);
-          if (item) {
-            item.x1 = snapHalf(orig.x1 + dx); item.y1 = snapHalf(orig.y1 + dy);
-            item.x2 = snapHalf(orig.x2 + dx); item.y2 = snapHalf(orig.y2 + dy);
-          }
-        } else if (kind === 'pipe') {
-          const item = state.pipes.find(x => x.id === id);
-          if (item) {
-            item.x1 = snapHalf(orig.x1 + dx); item.y1 = snapHalf(orig.y1 + dy);
-            item.x2 = snapHalf(orig.x2 + dx); item.y2 = snapHalf(orig.y2 + dy);
-          }
-        }
-        recalculateAll();
-        draw2D();
-        return;
-      }
-
-      draw2D();
-    });
-
-    canvas.addEventListener('pointerup', e => {
-      canvas.releasePointerCapture(e.pointerId);
-      updatePointerCoords(e.clientX, e.clientY);
-
-      if (state.pointer.activeDraw) {
-        const ad = state.pointer.activeDraw;
-        const x2 = state.pointer.snapX;
-        const y2 = state.pointer.snapY;
-
-        if (ad.kind === 'room') {
-          if (Math.abs(x2 - ad.x1) >= 1 && Math.abs(y2 - ad.y1) >= 1) {
-            const presetKey = document.getElementById('room-preset').value;
-            const preset = ROOM_PRESETS[presetKey] || ROOM_PRESETS.Office;
-            const newRoom = {
-              id: uid('rm'),
-              name: `${presetKey} ${state.rooms.length + 1}`,
-              x1: Math.min(ad.x1, x2),
-              y1: Math.min(ad.y1, y2),
-              x2: Math.max(ad.x1, x2),
-              y2: Math.max(ad.y1, y2),
-              ceiling: DEFAULT_CEILING_FT,
-              ach: preset.ach,
-              color: preset.color,
-              border: preset.border
-            };
+          recalculateSystem();
+        } else if (state.dragMode === 'resize_circle') {
+          const { room } = state.dragTargetMeta;
+          room.r = Math.max(0.5, snapVal(dist({ x: room.cx, y: room.cy }, wp)));
+          recalculateSystem();
+        } else if (state.dragMode === 'move_poly_vtx') {
+// ... existing code ... -->
+      canvas.addEventListener('pointerup', () => {
+        if (!state.isDragging) return;
+        if (state.dragMode === 'draw_rect' && state.draftRect) {
+          const r = state.draftRect;
+          const x = Math.min(r.x1, r.x2), y = Math.min(r.y1, r.y2);
+          const w = Math.abs(r.x2 - r.x1), h = Math.abs(r.y2 - r.y1);
+          if (w >= 0.5 && h >= 0.5) {
+            const ht = Math.max(4, parseFloat(document.getElementById('quickRoomHt').value) || 10);
+            const ach = Math.max(0.5, parseFloat(document.getElementById('quickRoomAch').value) || 6);
+            const newRoom = { id: genId('room'), name: `Room ${state.rooms.length + 1}`, shape: 'rect', x, y, w, h, height: ht, ach };
             state.rooms.push(newRoom);
-            selectItem('room', newRoom.id);
-            recalculateAll();
+            state.selected = { kind: 'room', id: newRoom.id };
+            showToast(`Added ${newRoom.name} (${formatFt(w)} × ${formatFt(h)} ft)`);
           }
-        } else if (ad.kind === 'duct') {
-          if (Math.hypot(x2 - ad.x1, y2 - ad.y1) >= 0.5) {
-            const newDuct = {
-              id: uid('dt'),
-              sys: document.getElementById('duct-sys').value,
-              shape: document.getElementById('duct-shape').value,
-              x1: ad.x1, y1: ad.y1,
-              x2: x2,    y2: y2,
-              manualDia: null,
-              aspect: 1.5
+          state.draftRect = null;
+          recalculateSystem();
+        } else if (state.dragMode === 'draw_circle' && state.draftCircle) {
+          const c = state.draftCircle;
+          if (c.r >= 0.5) {
+            const ht = Math.max(4, parseFloat(document.getElementById('quickRoomHt').value) || 10);
+            const ach = Math.max(0.5, parseFloat(document.getElementById('quickRoomAch').value) || 6);
+            const newRoom = { id: genId('room'), name: `Room ${state.rooms.length + 1}`, shape: 'circle', cx: c.cx, cy: c.cy, r: c.r, height: ht, ach };
+            state.rooms.push(newRoom);
+            state.selected = { kind: 'room', id: newRoom.id };
+            showToast(`Added ${newRoom.name} (Ø ${formatFt(c.r * 2)} ft)`);
+          }
+          state.draftCircle = null;
+          recalculateSystem();
+        }
+        state.isDragging = false;
+        state.dragMode = null;
+        state.dragTargetMeta = null;
+      });
+// ... existing code ... -->
+          let dimFields = '';
+          if (room.shape === 'rect') {
+            dimFields = `
+              <div class="grid grid-cols-2 gap-2">
+                <label class="block">
+                  <span class="text-[11px] text-slate-400">Width (ft)</span>
+                  <input id="propRoomW" type="number" min="0.5" step="0.1" value="${Number(room.w.toFixed(3))}"
+                    class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 font-mono text-xs text-white focus:border-sky-400 focus:outline-none" />
+                  <span id="propRoomWIn" class="block mt-0.5 text-[10px] font-mono text-slate-500">${formatFtIn(room.w)}</span>
+                </label>
+                <label class="block">
+                  <span class="text-[11px] text-slate-400">Length (ft)</span>
+                  <input id="propRoomH" type="number" min="0.5" step="0.1" value="${Number(room.h.toFixed(3))}"
+                    class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 font-mono text-xs text-white focus:border-sky-400 focus:outline-none" />
+                  <span id="propRoomHIn" class="block mt-0.5 text-[10px] font-mono text-slate-500">${formatFtIn(room.h)}</span>
+                </label>
+              </div>`;
+          } else if (room.shape === 'circle') {
+            dimFields = `
+              <label class="block">
+                <span class="text-[11px] text-slate-400">Diameter (ft)</span>
+                <input id="propRoomDia" type="number" min="1" step="0.1" value="${Number((room.r * 2).toFixed(3))}"
+                  class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 font-mono text-xs text-white focus:border-sky-400 focus:outline-none" />
+                <span id="propRoomDiaIn" class="block mt-0.5 text-[10px] font-mono text-slate-500">${formatFtIn(room.r * 2)} (Radius ${formatFt(room.r)} ft)</span>
+              </label>`;
+          } else {
+            dimFields = `<div class="text-[11px] text-slate-400 bg-slate-950/60 border border-slate-800 rounded-lg p-2">Drag yellow vertices in 2D to reshape polygon (${room.points.length} vertices).</div>`;
+          }
+
+          inspectorBody.innerHTML = `
+            <label class="block">
+              <span class="text-[11px] text-slate-400">Room Name</span>
+              <input id="propRoomName" type="text" value="${room.name}"
+                class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-sky-400 focus:outline-none" />
+            </label>
+            ${dimFields}
+            <div class="grid grid-cols-2 gap-2">
+              <label class="block">
+                <span class="text-[11px] text-slate-400">Ceiling Ht (ft)</span>
+                <input id="propRoomHeight" type="number" min="4" max="40" step="0.1" value="${room.height}"
+                  class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 font-mono text-xs text-white focus:border-sky-400 focus:outline-none" />
+              </label>
+              <label class="block">
+                <span class="text-[11px] text-slate-400">ACH (changes/hr)</span>
+                <input id="propRoomAch" type="number" min="0.5" max="60" step="0.5" value="${room.ach}"
+                  class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 font-mono text-xs text-sky-300 font-semibold focus:border-sky-400 focus:outline-none" />
+              </label>
+            </div>
+            <div class="bg-slate-950/80 border border-slate-800 rounded-lg p-2.5 space-y-1.5 font-mono text-[11px]">
+              <div class="flex justify-between"><span class="text-slate-400">Floor Area</span><span id="statRoomArea" class="text-slate-200">${res.area.toFixed(1)} ft²</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Volume</span><span id="statRoomVol" class="text-slate-200">${Math.round(res.volume)} ft³</span></div>
+              <div class="border-t border-slate-800 my-1"></div>
+              <div class="flex justify-between"><span class="text-orange-300">Exhaust CFM</span><span id="statRoomEx" class="text-orange-300 font-bold">${res.exhaustCfm.toFixed(1)} CFM</span></div>
+              <div class="flex justify-between"><span class="text-sky-300">Return (${state.returnRatioPct}%)</span><span id="statRoomRt" class="text-sky-300 font-bold">${res.returnCfm.toFixed(1)} CFM</span></div>
+            </div>
+            <button id="btnDelItem" class="mt-1 w-full py-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 text-xs font-medium transition">Delete Room</button>
+          `;
+
+          const syncRoomReadouts = () => {
+            const r = state.computed.roomResults[room.id];
+            if (!r) return;
+            const elArea = document.getElementById('statRoomArea');
+            const elVol = document.getElementById('statRoomVol');
+            const elEx = document.getElementById('statRoomEx');
+            const elRt = document.getElementById('statRoomRt');
+            if (elArea) elArea.textContent = `${r.area.toFixed(1)} ft²`;
+            if (elVol) elVol.textContent = `${Math.round(r.volume)} ft³`;
+            if (elEx) elEx.textContent = `${r.exhaustCfm.toFixed(1)} CFM`;
+            if (elRt) elRt.textContent = `${r.returnCfm.toFixed(1)} CFM`;
+            if (room.shape === 'rect') {
+              const wIn = document.getElementById('propRoomWIn');
+              const hIn = document.getElementById('propRoomHIn');
+              if (wIn) wIn.textContent = formatFtIn(room.w);
+              if (hIn) hIn.textContent = formatFtIn(room.h);
+            } else if (room.shape === 'circle') {
+              const dIn = document.getElementById('propRoomDiaIn');
+              if (dIn) dIn.textContent = `${formatFtIn(room.r * 2)} (Radius ${formatFt(room.r)} ft)`;
+            }
+          };
+
+          document.getElementById('propRoomName').oninput = (e) => { room.name = e.target.value; inspectorTitle.textContent = room.name; render(); updateScheduleUI(); };
+          if (room.shape === 'rect') {
+            document.getElementById('propRoomW').oninput = (e) => {
+              const v = parseFloat(e.target.value);
+              if (!isNaN(v) && v >= 0.5) { room.w = v; recalculateSystem({ skipInspectorRebuild: true }); syncRoomReadouts(); }
             };
-            state.ducts.push(newDuct);
-            selectItem('duct', newDuct.id);
-            recalculateAll();
-          }
-        } else if (ad.kind === 'pipe') {
-          if (Math.hypot(x2 - ad.x1, y2 - ad.y1) >= 0.5) {
-            const newPipe = {
-              id: uid('pp'),
-              sys: document.getElementById('pipe-sys').value,
-              elev: parseFloat(document.getElementById('pipe-elev').value) || 9.0,
-              x1: ad.x1, y1: ad.y1,
-              x2: x2,    y2: y2
+            document.getElementById('propRoomH').oninput = (e) => {
+              const v = parseFloat(e.target.value);
+              if (!isNaN(v) && v >= 0.5) { room.h = v; recalculateSystem({ skipInspectorRebuild: true }); syncRoomReadouts(); }
             };
-            state.pipes.push(newPipe);
-            selectItem('pipe', newPipe.id);
-            if (state.viewMode === '3d') rebuild3DScene();
+          } else if (room.shape === 'circle') {
+            document.getElementById('propRoomDia').oninput = (e) => {
+              const v = parseFloat(e.target.value);
+              if (!isNaN(v) && v >= 1) { room.r = v / 2; recalculateSystem({ skipInspectorRebuild: true }); syncRoomReadouts(); }
+            };
           }
+          document.getElementById('propRoomHeight').oninput = (e) => {
+            const v = parseFloat(e.target.value);
+            if (!isNaN(v) && v > 0) { room.height = v; recalculateSystem({ skipInspectorRebuild: true }); syncRoomReadouts(); }
+          };
+          document.getElementById('propRoomAch').oninput = (e) => {
+            const v = parseFloat(e.target.value);
+            if (!isNaN(v) && v >= 0) { room.ach = v; recalculateSystem({ skipInspectorRebuild: true }); syncRoomReadouts(); }
+          };
+          document.getElementById('btnDelItem').onclick = deleteSelected;
+          return;
         }
-      }
-
-      state.pointer.isDown = false;
-      state.pointer.isPanning = false;
-      state.pointer.dragOrig = null;
-      state.pointer.activeDraw = null;
-      draw2D();
-    });
-
-    // Zoom with Mouse Wheel
-    canvas.addEventListener('wheel', e => {
-      e.preventDefault();
-      const rect = canvas.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
-      const wx = s2wX(mx);
-      const wy = s2wY(my);
-
-      const factor = e.deltaY < 0 ? 1.12 : 0.89;
-      state.camera.pxPerFt = Math.max(8, Math.min(80, state.camera.pxPerFt * factor));
-      state.camera.x = mx - wx * state.camera.pxPerFt;
-      state.camera.y = my - wy * state.camera.pxPerFt;
-
-      document.getElementById('hud-zoom').textContent = `${Math.round((state.camera.pxPerFt / 24) * 100)}%`;
-      draw2D();
-    }, { passive: false });
-
-    // =========================================================================
-    // 7. THREE.JS 3D MEP VIEWPORT (10-FOOT EXTRUDED WALLS & CEILING DUCTWORK)
-    // =========================================================================
-    let threeScene, threeCamera, threeRenderer, mepGroup;
-    let orbitState = { isDown: false, btn: 0, startX: 0, startY: 0, theta: 0.75, phi: 0.95, radius: 58, target: new THREE.Vector3(18, 4, 14) };
-
-    function init3D() {
-      const container = document.getElementById('three-container');
-      threeScene = new THREE.Scene();
-      threeScene.background = new THREE.Color(0x070b14);
-
-      threeCamera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 500);
-      threeRenderer = new THREE.WebGLRenderer({ antialias: true });
-      threeRenderer.setSize(container.clientWidth, container.clientHeight);
-      threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-      container.innerHTML = '';
-      container.appendChild(threeRenderer.domElement);
-
-      // Lights
-      const amb = new THREE.AmbientLight(0xffffff, 0.65);
-      threeScene.add(amb);
-      const dir = new THREE.DirectionalLight(0xffffff, 0.75);
-      dir.position.set(30, 60, 40);
-      threeScene.add(dir);
-
-      // Ground Grid (1ft minor / 5ft major)
-      const gridHelper = new THREE.GridHelper(100, 100, 0x334155, 0x1e293b);
-      gridHelper.position.set(25, 0, 25);
-      threeScene.add(gridHelper);
-
-      mepGroup = new THREE.Group();
-      threeScene.add(mepGroup);
-
-      // Orbit Controls via Pointer Events
-      const dom = threeRenderer.domElement;
-      dom.addEventListener('pointerdown', e => {
-        orbitState.isDown = true;
-        orbitState.btn = e.button;
-        orbitState.startX = e.clientX;
-        orbitState.startY = e.clientY;
-      });
-      window.addEventListener('pointermove', e => {
-        if (!orbitState.isDown || state.viewMode !== '3d') return;
-        const dx = e.clientX - orbitState.startX;
-        const dy = e.clientY - orbitState.startY;
-        orbitState.startX = e.clientX;
-        orbitState.startY = e.clientY;
-
-        if (orbitState.btn === 2 || e.shiftKey) {
-          orbitState.target.x -= dx * 0.05;
-          orbitState.target.z -= dy * 0.05;
-        } else {
-          orbitState.theta -= dx * 0.008;
-          orbitState.phi = Math.max(0.15, Math.min(Math.PI / 2 - 0.05, orbitState.phi - dy * 0.008));
-        }
-        update3DCamera();
-      });
-      window.addEventListener('pointerup', () => { orbitState.isDown = false; });
-      dom.addEventListener('wheel', e => {
-        e.preventDefault();
-        orbitState.radius = Math.max(12, Math.min(140, orbitState.radius + e.deltaY * 0.03));
-        update3DCamera();
-      }, { passive: false });
-      dom.addEventListener('contextmenu', e => e.preventDefault());
-
-      update3DCamera();
-      animate3D();
-    }
-
-    function update3DCamera() {
-      if (!threeCamera) return;
-      const { radius, theta, phi, target } = orbitState;
-      threeCamera.position.x = target.x + radius * Math.sin(phi) * Math.sin(theta);
-      threeCamera.position.y = target.y + radius * Math.cos(phi);
-      threeCamera.position.z = target.z + radius * Math.sin(phi) * Math.cos(theta);
-      threeCamera.lookAt(target);
-    }
-
-    function rebuild3DScene() {
-      if (!mepGroup) return;
-      while (mepGroup.children.length) mepGroup.remove(mepGroup.children[0]);
-
-      // 1. Extruded 10-Foot Semi-Transparent Room Walls & Floor Slabs
-      state.rooms.forEach(r => {
-        const w = Math.abs(r.x2 - r.x1);
-        const d = Math.abs(r.y2 - r.y1);
-        const h = Number(r.ceiling) || DEFAULT_CEILING_FT;
-        const cx = (r.x1 + r.x2) / 2;
-        const cz = (r.y1 + r.y2) / 2;
-
-        // Floor pad
-        const floorGeo = new THREE.BoxGeometry(w, 0.15, d);
-        const floorMat = new THREE.MeshLambertMaterial({ color: 0x1e293b });
-        const floorMesh = new THREE.Mesh(floorGeo, floorMat);
-        floorMesh.position.set(cx, 0.075, cz);
-        mepGroup.add(floorMesh);
-
-        // Translucent 10ft wall volume + crisp wireframe edges
-        const boxGeo = new THREE.BoxGeometry(w, h, d);
-        const boxMat = new THREE.MeshLambertMaterial({
-          color: 0x38bdf8,
-          transparent: true,
-          opacity: 0.08,
-          depthWrite: false
-        });
-        const boxMesh = new THREE.Mesh(boxGeo, boxMat);
-        boxMesh.position.set(cx, h / 2, cz);
-        mepGroup.add(boxMesh);
-
-        const edges = new THREE.EdgesGeometry(boxGeo);
-        const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x475569 }));
-        line.position.set(cx, h / 2, cz);
-        mepGroup.add(line);
-      });
-
-      // 2. Equipment (AHU & Ceiling Vents/Diffusers at ~9.8 ft elevation)
-      state.equipment.forEach(eq => {
-        if (eq.type === 'ahu') {
-          const geo = new THREE.BoxGeometry(2.5, 2.2, 2.0);
-          const mat = new THREE.MeshLambertMaterial({ color: 0xf59e0b });
-          const mesh = new THREE.Mesh(geo, mat);
-          mesh.position.set(eq.x, 8.8, eq.y);
-          mepGroup.add(mesh);
-        } else {
-          const color = eq.type === 'supply_vent' ? 0x38bdf8 : (eq.type === 'return_vent' ? 0x34d399 : 0xfb7185);
-          const geo = new THREE.CylinderGeometry(0.65, 0.65, 0.3, 16);
-          const mat = new THREE.MeshLambertMaterial({ color });
-          const mesh = new THREE.Mesh(geo, mat);
-          mesh.position.set(eq.x, 9.75, eq.y);
-          mepGroup.add(mesh);
-        }
-      });
-
-      // 3. Ductwork (Mounted in ceiling plenum at y = 9.2 ft)
-      state.ducts.forEach(d => {
-        const dx = d.x2 - d.x1;
-        const dz = d.y2 - d.y1;
-        const len = Math.hypot(dx, dz);
-        if (len < 0.1) return;
-
-        const radiusFt = Math.max(0.22, (d.eqDia / 12) / 2);
-        const color = (SYSTEM_COLORS[d.sys] || SYSTEM_COLORS.supply).hex;
-        const mat = new THREE.MeshLambertMaterial({ color });
-
-        let geo;
-        if (d.shape === 'rect') {
-          const wFt = (d.rectW || 12) / 12;
-          const hFt = (d.rectH || 8) / 12;
-          geo = new THREE.BoxGeometry(wFt, hFt, len);
-        } else {
-          geo = new THREE.CylinderGeometry(radiusFt, radiusFt, len, 16);
-          geo.rotateX(Math.PI / 2);
-        }
-
-        const mesh = new THREE.Mesh(geo, mat);
-        mesh.position.set((d.x1 + d.x2) / 2, 9.1, (d.y1 + d.y2) / 2);
-        mesh.rotation.y = Math.atan2(dx, dz);
-        mepGroup.add(mesh);
-      });
-
-      // 4. Plumbing Pipes (at user-selected elevation)
-      state.pipes.forEach(p => {
-        const dx = p.x2 - p.x1;
-        const dz = p.y2 - p.y1;
-        const len = Math.hypot(dx, dz);
-        if (len < 0.1) return;
-
-        const color = (SYSTEM_COLORS[p.sys] || SYSTEM_COLORS.cw).hex;
-        const geo = new THREE.CylinderGeometry(0.1, 0.1, len, 10);
-        geo.rotateX(Math.PI / 2);
-        const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color }));
-        mesh.position.set((p.x1 + p.x2) / 2, p.elev || 9.0, (p.y1 + p.y2) / 2);
-        mesh.rotation.y = Math.atan2(dx, dz);
-        mepGroup.add(mesh);
-      });
-    }
-
-    function animate3D() {
-      requestAnimationFrame(animate3D);
-      if (state.viewMode === '3d' && threeRenderer && threeScene && threeCamera) {
-        threeRenderer.render(threeScene, threeCamera);
-      }
-    }
-
-    // =========================================================================
-    // 8. TOOLBAR, KEYBOARD SHORTCUTS & STARTER SAMPLE LAYOUT
-    // =========================================================================
-    function setTool(toolName) {
-      state.tool = toolName;
-      document.querySelectorAll('.tool-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.tool === toolName);
-      });
-
-      // Toggle contextual sub-toolbar options
-      document.getElementById('opt-duct').classList.toggle('hidden', toolName !== 'duct');
-      document.getElementById('opt-pipe').classList.toggle('hidden', toolName !== 'pipe');
-      document.getElementById('opt-room').classList.toggle('hidden', toolName !== 'room');
-
-      const hints = {
-        select: 'Click an element to inspect or drag to move (snaps to 0.5 ft grid).',
-        room: 'Click and drag on the grid to draw a room (default 10 ft ceiling volume).',
-        ahu: 'Click on the 0.5 ft grid to place the Air Handling Unit (AHU).',
-        supply_vent: 'Click inside any room to place a Supply Air Diffuser.',
-        return_vent: 'Click inside any room to place a Return Air Grille.',
-        exhaust_vent: 'Click anywhere (e.g., Restroom or Lab) to place an Exhaust Vent.',
-        duct: 'Click and drag between AHU and vents to route ductwork (0.5 ft snap).',
-        pipe: 'Click and drag to route Cold Water, Hot Water, or DWV plumbing lines.'
+// ... existing code ... -->
+      const TOOL_HINTS = {
+        select: 'Click a room, duct, or pipe to inspect & edit. Drag handles to resize or reroute.',
+        pan: 'Click and drag to pan the blueprint. Scroll wheel to zoom.',
+        rect: 'Drag on the grid OR type exact Width × Length (0.1 ft) below and click + Place Room.',
+        circle: 'Drag outward from center OR type exact Diameter (0.1 ft) below and click + Place Room.',
+        poly: 'Click points to draw a Polygon / L-Shape room. Click green start or press Enter to close.',
+        ahu: 'Click anywhere on the floorplan to place the Air Handling Unit (AHU).',
+        duct_exhaust: 'Click to route Exhaust Duct (100% room CFM, default Z=8.5 ft). Double-click/Enter to finish.',
+        duct_return: 'Click to route Return Duct (scaled by Return %, default Z=9.2 ft). Double-click/Enter to finish.',
+        pipe_cold: 'Click to route Cold Water Pipe (default 1" Ø, Z=7.6 ft). Double-click/Enter to finish.',
+        pipe_hot: 'Click to route Hot Water Pipe (default 3/4" Ø, Z=7.2 ft). Double-click/Enter to finish.',
+        pipe_drain: 'Click to route Drain / DWV Pipe (default 3" Ø, 1/4"/ft slope, Z=1.8 ft). Double-click/Enter to finish.',
       };
-      document.getElementById('tool-hint').innerHTML = `
-        <span class="inline-block w-2 h-2 rounded-full bg-sky-400"></span>
-        <span>${hints[toolName] || ''}</span>
-      `;
-    }
 
-    document.querySelectorAll('.tool-btn').forEach(btn => {
-      btn.addEventListener('click', () => setTool(btn.dataset.tool));
-    });
-
-    // 2D / 3D Switcher
-    document.getElementById('btn-view-2d').addEventListener('click', () => {
-      state.viewMode = '2d';
-      document.getElementById('view-2d-wrap').classList.remove('hidden');
-      document.getElementById('view-3d-wrap').classList.add('hidden');
-      document.getElementById('btn-view-2d').className = 'px-2.5 py-1 rounded-md text-xs font-semibold bg-sky-600 text-white transition';
-      document.getElementById('btn-view-3d').className = 'px-2.5 py-1 rounded-md text-xs font-semibold text-slate-300 hover:text-white transition';
-      resizeCanvas();
-    });
-
-    document.getElementById('btn-view-3d').addEventListener('click', () => {
-      state.viewMode = '3d';
-      document.getElementById('view-2d-wrap').classList.add('hidden');
-      document.getElementById('view-3d-wrap').classList.remove('hidden');
-      document.getElementById('btn-view-3d').className = 'px-2.5 py-1 rounded-md text-xs font-semibold bg-sky-600 text-white transition';
-      document.getElementById('btn-view-2d').className = 'px-2.5 py-1 rounded-md text-xs font-semibold text-slate-300 hover:text-white transition';
-      if (!threeRenderer) init3D();
-      const container = document.getElementById('three-container');
-      threeRenderer.setSize(container.clientWidth, container.clientHeight);
-      threeCamera.aspect = container.clientWidth / container.clientHeight;
-      threeCamera.updateProjectionMatrix();
-      rebuild3DScene();
-    });
-
-    // Zoom buttons
-    document.getElementById('zoom-in').addEventListener('click', () => {
-      state.camera.pxPerFt = Math.min(80, state.camera.pxPerFt * 1.2);
-      document.getElementById('hud-zoom').textContent = `${Math.round((state.camera.pxPerFt / 24) * 100)}%`;
-      draw2D();
-    });
-    document.getElementById('zoom-out').addEventListener('click', () => {
-      state.camera.pxPerFt = Math.max(8, state.camera.pxPerFt * 0.85);
-      document.getElementById('hud-zoom').textContent = `${Math.round((state.camera.pxPerFt / 24) * 100)}%`;
-      draw2D();
-    });
-    document.getElementById('zoom-reset').addEventListener('click', () => {
-      state.camera.x = 50;
-      state.camera.y = 50;
-      state.camera.pxPerFt = 22;
-      document.getElementById('hud-zoom').textContent = `${Math.round((state.camera.pxPerFt / 24) * 100)}%`;
-      draw2D();
-    });
-
-    // Toggle Right Inspector Drawer
-    document.getElementById('btn-toggle-panel').addEventListener('click', () => {
-      document.getElementById('inspector-drawer').classList.toggle('hidden');
-      setTimeout(resizeCanvas, 50);
-    });
-
-    // Keyboard shortcuts
-    window.addEventListener('keydown', e => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
-      if (e.key === 'Delete' || e.key === 'Backspace') deleteSelected();
-      if (e.key === 'Escape') { state.pointer.activeDraw = null; selectItem(null, null); draw2D(); }
-      if (e.key.toLowerCase() === 'v') setTool('select');
-      if (e.key.toLowerCase() === 'r') setTool('room');
-    });
-
-    // Load Starter Floorplan (Office + Conference + Restroom with 10ft ceilings & user-placed exhaust vent)
-    function loadSampleLayout() {
-      state.rooms = [
-        {
-          id: 'rm_1', name: 'Main Office', x1: 2, y1: 2, x2: 20, y2: 16,
-          ceiling: 10.0, ach: 6, color: ROOM_PRESETS.Office.color, border: ROOM_PRESETS.Office.border
-        },
-        {
-          id: 'rm_2', name: 'Conference Rm', x1: 20, y1: 2, x2: 34, y2: 12,
-          ceiling: 10.0, ach: 8, color: ROOM_PRESETS.Conference.color, border: ROOM_PRESETS.Conference.border
-        },
-        {
-          id: 'rm_3', name: 'Restroom (Exhaust)', x1: 20, y1: 12, x2: 28, y2: 20,
-          ceiling: 10.0, ach: 12, color: ROOM_PRESETS.Restroom.color, border: ROOM_PRESETS.Restroom.border
+      function updateQuickRoomBarVisibility() {
+        const showRect = state.viewMode === '2d' && state.tool === 'rect';
+        const showCircle = state.viewMode === '2d' && state.tool === 'circle';
+        if (showRect || showCircle) {
+          quickRoomBar.classList.remove('hidden');
+          quickRectFields.classList.toggle('hidden', !showRect);
+          quickCircleFields.classList.toggle('hidden', !showCircle);
+        } else {
+          quickRoomBar.classList.add('hidden');
         }
-      ];
+      }
 
-      state.equipment = [
-        { id: 'eq_ahu',  type: 'ahu',          x: 6.0,  y: 20.0, manualCfm: null, calcCfm: 0 },
-        { id: 'eq_s1',   type: 'supply_vent',  x: 7.0,  y: 9.0,  manualCfm: null, calcCfm: 0 },
-        { id: 'eq_s2',   type: 'supply_vent',  x: 15.0, y: 9.0,  manualCfm: null, calcCfm: 0 },
-        { id: 'eq_s3',   type: 'supply_vent',  x: 27.0, y: 7.0,  manualCfm: null, calcCfm: 0 },
-        { id: 'eq_r1',   type: 'return_vent',  x: 11.0, y: 13.5, manualCfm: null, calcCfm: 0 },
-        { id: 'eq_exh1', type: 'exhaust_vent', x: 24.0, y: 16.0, manualCfm: null, calcCfm: 0 }
-      ];
+      function placeRoomFromQuickBar() {
+        const cw = canvas.clientWidth || 800;
+        const ch = canvas.clientHeight || 500;
+        const centerWorld = screenToWorld(cw / 2, ch / 2);
+        const offset = (state.rooms.length % 5) * 1.5;
 
-      state.ducts = [
-        // Supply trunk & branches snapped cleanly to 0.5 ft
-        { id: 'dt_1', sys: 'supply', shape: 'rect',  x1: 6.0,  y1: 20.0, x2: 6.0,  y2: 9.0,  manualDia: null, aspect: 1.5 },
-        { id: 'dt_2', sys: 'supply', shape: 'round', x1: 6.0,  y1: 9.0,  x2: 7.0,  y2: 9.0,  manualDia: null, aspect: 1.5 },
-        { id: 'dt_3', sys: 'supply', shape: 'round', x1: 6.0,  y1: 9.0,  x2: 15.0, y2: 9.0,  manualDia: null, aspect: 1.5 },
-        { id: 'dt_4', sys: 'supply', shape: 'round', x1: 15.0, y1: 9.0,  x2: 27.0, y2: 7.0,  manualDia: null, aspect: 1.5 },
-        // Return branch
-        { id: 'dt_5', sys: 'return', shape: 'rect',  x1: 6.0,  y1: 20.0, x2: 11.0, y2: 13.5, manualDia: null, aspect: 1.5 },
-        // Dedicated Exhaust run from user-placed Restroom Exhaust Vent to exterior wall termination
-        { id: 'dt_6', sys: 'exhaust', shape: 'round', x1: 24.0, y1: 16.0, x2: 24.0, y2: 22.0, manualDia: null, aspect: 1.5 }
-      ];
+        const nameInput = document.getElementById('quickRoomName');
+        const name = nameInput.value.trim() || `Room ${state.rooms.length + 1}`;
+        const ht = Math.max(4, parseFloat(document.getElementById('quickRoomHt').value) || 10);
+        const ach = Math.max(0.5, parseFloat(document.getElementById('quickRoomAch').value) || 6);
 
-      state.pipes = [
-        { id: 'pp_1', sys: 'cw',  x1: 22.0, y1: 22.0, x2: 22.0, y2: 17.5, elev: 8.5 },
-        { id: 'pp_2', sys: 'dwv', x1: 26.0, y1: 17.5, x2: 26.0, y2: 22.0, elev: 8.0 }
-      ];
+        if (state.tool === 'rect') {
+          const w = Math.max(0.5, parseFloat(document.getElementById('quickRoomW').value) || 12);
+          const h = Math.max(0.5, parseFloat(document.getElementById('quickRoomL').value) || 10);
+          const x = snapVal(centerWorld.x - w / 2 + offset);
+          const y = snapVal(centerWorld.y - h / 2 + offset);
+          const newRoom = { id: genId('room'), name, shape: 'rect', x, y, w, h, height: ht, ach };
+          state.rooms.push(newRoom);
+          state.selected = { kind: 'room', id: newRoom.id };
+          showToast(`Placed ${name} (${formatFt(w)} × ${formatFt(h)} ft)`);
+        } else if (state.tool === 'circle') {
+          const dia = Math.max(1, parseFloat(document.getElementById('quickRoomDia').value) || 12);
+          const r = dia / 2;
+          const cx = snapVal(centerWorld.x + offset);
+          const cy = snapVal(centerWorld.y + offset);
+          const newRoom = { id: genId('room'), name, shape: 'circle', cx, cy, r, height: ht, ach };
+          state.rooms.push(newRoom);
+          state.selected = { kind: 'room', id: newRoom.id };
+          showToast(`Placed ${name} (Ø ${formatFt(dia)} ft)`);
+        }
 
-      state.selected = null;
-      recalculateAll();
-      draw2D();
-    }
+        nameInput.value = '';
+        setTool('select');
+        recalculateSystem();
+      }
 
-    document.getElementById('btn-sample').addEventListener('click', () => {
-      loadSampleLayout();
-      showToast('Starter MEP floorplan loaded');
-    });
+      function setTool(toolName) {
+        if (state.viewMode === '3d' && toolName !== 'select') {
+          setViewMode('2d');
+        }
+        cancelDraft();
+        state.tool = toolName;
+        if (state.viewMode === '2d') {
+          toolHintText.textContent = TOOL_HINTS[toolName] || '';
+        }
+        updateQuickRoomBarVisibility();
+        canvas.style.cursor = toolName === 'pan' ? 'grab' : toolName === 'select' ? 'default' : 'crosshair';
+        document.querySelectorAll('.tool-btn').forEach((btn) => {
+          const active = btn.dataset.tool === toolName;
+          btn.className = `tool-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition ${
+            active ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-300 hover:bg-slate-800'
+          }`;
+        });
+      }
+// ... existing code ... -->
+      selectSnapStep.addEventListener('change', () => {
+        state.snapMode = selectSnapStep.value;
+        const labels = { '0.1in': '0.1"', '0.1ft': '0.1\'', '1in': '1"', '1ft': '1\'', 'off': 'OFF' };
+        snapBadge.textContent = labels[state.snapMode] || state.snapMode;
+      });
 
-    document.getElementById('btn-clear').addEventListener('click', () => {
-      state.rooms = [];
-      state.equipment = [];
-      state.ducts = [];
-      state.pipes = [];
-      state.selected = null;
-      recalculateAll();
-      draw2D();
-      showToast('Canvas cleared');
-    });
+      document.getElementById('btnPlaceQuickRoom').addEventListener('click', placeRoomFromQuickBar);
+      quickRoomBar.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          placeRoomFromQuickBar();
+        }
+      });
 
-    // Boot application
-    window.onload = () => {
-      loadSampleLayout();
-      resizeCanvas();
-    };
-  </script>
-</body>
-</html>
+      document.getElementById('btnToggleOrtho').addEventListener('click', () => {
+// ... existing code ... -->
