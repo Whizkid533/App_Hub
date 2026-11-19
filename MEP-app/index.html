@@ -1,1 +1,3464 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DuctCAD 3D — HVAC Duct CFM &amp; Plumbing MEP Planner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #0b1120;
+      color: #e2e8f0;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    input, select, textarea {
+      user-select: text;
+      -webkit-user-select: text;
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    canvas {
+      display: block;
+      touch-action: none;
+    }
+  </style>
+</head>
+<body class="h-screen w-screen flex flex-col bg-slate-950 text-slate-100 overflow-hidden">
 
+  <!-- ==================== TOP HEADER & GLOBAL CONTROLS ==================== -->
+  <header class="bg-slate-900/95 border-b border-slate-800 px-3 py-2 flex flex-wrap items-center justify-between gap-2 z-30 shrink-0">
+    <!-- Brand & 2D/3D Switcher -->
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-lg bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-400 shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-sm font-bold tracking-tight text-white leading-tight">DuctCAD <span class="text-sky-400 font-mono font-semibold">3D MEP</span></h1>
+          <p class="text-[11px] text-slate-400 leading-tight hidden lg:block">HVAC Duct CFM &amp; Plumbing Planner</p>
+        </div>
+      </div>
+
+      <!-- 2D / 3D Mode Toggle -->
+      <div class="flex items-center bg-slate-950 border border-indigo-500/40 rounded-lg p-0.5 shadow-inner">
+        <button id="btnView2D" class="px-3 py-1 rounded-md text-xs font-semibold transition bg-indigo-600 text-white shadow flex items-center gap-1.5" title="2D Floorplan Editor (Shortcut: 2)">
+          <span>2D Plan</span>
+        </button>
+        <button id="btnView3D" class="px-3 py-1 rounded-md text-xs font-semibold transition text-slate-300 hover:text-white flex items-center gap-1.5" title="3D MEP Walkthrough (Shortcut: 3)">
+          <span>3D MEP</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Global HVAC Constraints -->
+    <div class="flex flex-wrap items-center gap-2">
+      <!-- Max Velocity -->
+      <label class="flex items-center gap-1.5 bg-slate-800/80 border border-slate-700 rounded-lg px-2 py-1">
+        <span class="text-[11px] text-slate-400 font-medium whitespace-nowrap">Max Vel</span>
+        <input id="inputMaxVel" type="number" min="100" max="5000" step="50" value="800"
+          class="w-16 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs font-mono text-sky-300 focus:outline-none focus:border-sky-400 text-right" />
+        <span class="text-[10px] text-slate-400 font-mono">FPM</span>
+      </label>
+
+      <!-- Max Static Pressure Loss -->
+      <label class="flex items-center gap-1.5 bg-slate-800/80 border border-slate-700 rounded-lg px-2 py-1">
+        <span class="text-[11px] text-slate-400 font-medium whitespace-nowrap">Max Static</span>
+        <input id="inputMaxStatic" type="number" min="0.05" max="5" step="0.05" value="0.5"
+          class="w-14 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs font-mono text-sky-300 focus:outline-none focus:border-sky-400 text-right" />
+        <span class="text-[10px] text-slate-400 font-mono">InWg</span>
+      </label>
+
+      <!-- Return Air Ratio -->
+      <label class="flex items-center gap-1.5 bg-slate-800/80 border border-slate-700 rounded-lg px-2 py-1" title="Return Air % of Exhaust (Remainder is Fresh Air Makeup)">
+        <span class="text-[11px] text-slate-400 font-medium whitespace-nowrap">Return</span>
+        <input id="inputReturnRatio" type="number" min="0" max="100" step="5" value="90"
+          class="w-12 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs font-mono text-blue-300 focus:outline-none focus:border-blue-400 text-right" />
+        <span class="text-[10px] text-slate-400 font-mono">%</span>
+        <span id="labelFreshRatio" class="text-[10px] text-emerald-400 font-mono border-l border-slate-700 pl-1.5">OA 10%</span>
+      </label>
+
+      <!-- Round / Rectangular Duct Toggle -->
+      <div class="flex items-center gap-1 bg-slate-800/90 border border-sky-500/40 rounded-lg p-0.5 shadow-sm">
+        <button id="btnShapeRound" class="px-2.5 py-1 rounded-md text-xs font-semibold transition bg-sky-600 text-white shadow">Round</button>
+        <button id="btnShapeRect" class="px-2.5 py-1 rounded-md text-xs font-semibold transition text-slate-300 hover:text-white">Rectangular</button>
+        <select id="selectGlobalRectHeight" title="Global Target Rectangular Duct Height"
+          class="hidden ml-0.5 bg-slate-950 border border-slate-700 rounded-md px-1.5 py-1 text-[11px] font-mono text-sky-300 focus:outline-none focus:border-sky-400">
+          <option value="auto">H: Auto</option>
+          <option value="6">H: 6"</option>
+          <option value="8">H: 8"</option>
+          <option value="10">H: 10"</option>
+          <option value="12">H: 12"</option>
+          <option value="14">H: 14"</option>
+          <option value="16">H: 16"</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="flex items-center gap-1.5">
+      <button id="btnLoadSample" class="px-2.5 py-1.5 rounded-lg bg-indigo-600/90 hover:bg-indigo-500 text-white text-xs font-medium transition flex items-center gap-1.5 shadow-sm">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/></svg>
+        <span class="hidden md:inline">Sample</span>
+      </button>
+      <button id="btnDeleteSelected" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-600/80 border border-slate-700 hover:border-rose-500 text-slate-300 hover:text-white text-xs font-medium transition" title="Delete Selected (Del)">
+        Delete
+      </button>
+      <button id="btnClearAll" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition">
+        Clear
+      </button>
+    </div>
+  </header>
+
+  <!-- ==================== LIVE SYSTEM SUMMARY BAR ==================== -->
+  <section class="bg-slate-900/70 border-b border-slate-800/90 px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 text-xs shrink-0">
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+      <div class="flex items-center gap-1.5">
+        <span class="w-2 h-2 rounded-full bg-orange-500"></span>
+        <span class="text-slate-400">Exhaust:</span>
+        <span id="sumExhaustCfm" class="font-mono font-semibold text-orange-300">0 CFM</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+        <span class="text-slate-400">Return (<span id="sumReturnPct">90</span>%):</span>
+        <span id="sumReturnCfm" class="font-mono font-semibold text-sky-300">0 CFM</span>
+      </div>
+      <div class="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/25 rounded-md px-2 py-0.5" title="Calculated outdoor air makeup balance (read-only)">
+        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+        <span class="text-slate-300">Fresh Air (<span id="sumFreshPct">10</span>%):</span>
+        <span id="sumFreshCfm" class="font-mono font-semibold text-emerald-300">0 CFM</span>
+      </div>
+      <div class="flex items-center gap-1.5 border-l border-slate-800 pl-3">
+        <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+        <span class="text-slate-400">Plumbing:</span>
+        <span id="sumPlumbingLen" class="font-mono font-semibold text-cyan-300">0 ft</span>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-3">
+      <div class="flex items-center gap-1.5">
+        <span class="text-slate-400">Peak Vel:</span>
+        <span id="sumPeakVel" class="font-mono font-semibold text-emerald-400">0 FPM</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="text-slate-400">Max Static:</span>
+        <span id="sumMaxStatic" class="font-mono font-semibold text-emerald-400">0.000 InWg</span>
+      </div>
+      <span id="sumClashBadge" class="hidden px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40" title="3D clearance warning between ductwork and plumbing">
+        0 CLASHES
+      </span>
+      <span id="sumStatusBadge" class="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+        SYSTEM OK
+      </span>
+    </div>
+  </section>
+
+  <!-- ==================== MAIN WORKSPACE ==================== -->
+  <div class="flex-1 flex min-h-0 overflow-hidden relative">
+
+    <!-- LEFT TOOL PALETTE -->
+    <aside class="w-14 sm:w-44 bg-slate-900/95 border-r border-slate-800 flex flex-col py-2 px-1.5 sm:px-2 gap-1 overflow-y-auto shrink-0 z-20">
+      <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold px-2 pt-0.5 pb-0.5 hidden sm:block">Navigation</div>
+      <button data-tool="select" class="tool-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition bg-sky-600 text-white">
+        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5"/></svg>
+        <span class="hidden sm:inline flex-1 text-left">Select / Edit</span>
+        <span class="hidden sm:inline text-[10px] opacity-60 font-mono">V</span>
+      </button>
+      <button data-tool="pan" class="tool-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition text-slate-300 hover:bg-slate-800">
+        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11"/></svg>
+        <span class="hidden sm:inline flex-1 text-left">Pan Canvas</span>
+        <span class="hidden sm:inline text-[10px] opacity-60 font-mono">H</span>
+      </button>
+
+      <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold px-2 pt-2 pb-0.5 hidden sm:block">Floorplan Rooms</div>
+      <button data-tool="rect" class="tool-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition text-slate-300 hover:bg-slate-800">
+        <svg class="w-4 h-4 shrink-0 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/></svg>
+        <span class="hidden sm:inline flex-1 text-left">Rect Room</span>
+        <span class="hidden sm:inline text-[10px] opacity-60 font-mono">R</span>
+      </button>
+      <button data-tool="circle" class="tool-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition text-slate-300 hover:bg-slate-800">
+        <svg class="w-4 h-4 shrink-0 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg>
+        <span class="hidden sm:inline flex-1 text-left">Circle Room</span>
+        <span class="hidden sm:inline text-[10px] opacity-60 font-mono">C</span>
+      </button>
+      <button data-tool="poly" class="tool-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition text-slate-300 hover:bg-slate-800">
+        <svg class="w-4 h-4 shrink-0 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 5h8v6h8v8H4V5z"/></svg>
+        <span class="hidden sm:inline flex-1 text-left">Polygon / L</span>
+        <span class="hidden sm:inline text-[10px] opacity-60 font-mono">P</span>
+      </button>
+
+      <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold px-2 pt-2 pb-0.5 hidden sm:block">HVAC Ductwork</div>
+      <button data-tool="ahu" class="tool-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition text-slate-300 hover:bg-slate-800">
+        <svg class="w-4 h-4 shrink-0 text-indigo-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 12a3 3 0 106 0 3 3 0 00-6 0z"/></svg>
+        <span class="hidden sm:inline flex-1 text-left">Place AHU</span>
+        <span class="hidden sm:inline text-[10px] opacity-60 font-mono">A</span>
+      </button>
+      <button data-tool="duct_exhaust" class="tool-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition text-slate-300 hover:bg-slate-800">
+        <span class="w-3.5 h-3.5 rounded-full bg-orange-500 shrink-0 ring-2 ring-orange-500/30"></span>
+        <span class="hidden sm:inline flex-1 text-left">Exhaust Duct</span>
+        <span class="hidden sm:inline text-[10px] opacity-60 font-mono">E</span>
+      </button>
+      <button data-tool="duct_return" class="tool-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition text-slate-300 hover:bg-slate-800">
+        <span class="w-3.5 h-3.5 rounded-full bg-sky-400 shrink-0 ring-2 ring-sky-400/30"></span>
+        <span class="hidden sm:inline flex-1 text-left">Return Duct</span>
+        <span class="hidden sm:inline text-[10px] opacity-60 font-mono">T</span>
+      </button>
+
+      <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold px-2 pt-2 pb-0.5 hidden sm:block">Plumbing Pipes</div>
+      <button data-tool="pipe_cold" class="tool-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition text-slate-300 hover:bg-slate-800">
+        <span class="w-3.5 h-3.5 rounded-full bg-cyan-400 shrink-0 ring-2 ring-cyan-400/30"></span>
+        <span class="hidden sm:inline flex-1 text-left">Cold Water</span>
+        <span class="hidden sm:inline text-[10px] opacity-60 font-mono">W</span>
+      </button>
+      <button data-tool="pipe_hot" class="tool-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition text-slate-300 hover:bg-slate-800">
+        <span class="w-3.5 h-3.5 rounded-full bg-rose-500 shrink-0 ring-2 ring-rose-500/30"></span>
+        <span class="hidden sm:inline flex-1 text-left">Hot Water</span>
+        <span class="hidden sm:inline text-[10px] opacity-60 font-mono">O</span>
+      </button>
+      <button data-tool="pipe_drain" class="tool-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition text-slate-300 hover:bg-slate-800">
+        <span class="w-3.5 h-3.5 rounded-full bg-purple-500 shrink-0 ring-2 ring-purple-500/30"></span>
+        <span class="hidden sm:inline flex-1 text-left">Drain / DWV</span>
+        <span class="hidden sm:inline text-[10px] opacity-60 font-mono">D</span>
+      </button>
+
+      <div class="mt-auto pt-2.5 border-t border-slate-800 flex flex-col gap-1.5">
+        <button id="btnToggleSnap" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium bg-sky-500/15 text-sky-300 border border-sky-500/30 transition">
+          <span class="hidden sm:inline">1ft Grid Snap</span>
+          <span class="sm:hidden text-[10px] font-mono">1ft</span>
+          <span id="snapBadge" class="text-[10px] font-mono font-bold">ON</span>
+        </button>
+        <button id="btnToggleOrtho" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium bg-sky-500/15 text-sky-300 border border-sky-500/30 transition">
+          <span class="hidden sm:inline">90° Ortho</span>
+          <span class="sm:hidden text-[10px] font-mono">90°</span>
+          <span id="orthoBadge" class="text-[10px] font-mono font-bold">ON</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- CENTER INTERACTIVE VIEWPORT (2D CAD + 3D THREE.JS) -->
+    <main id="canvasContainer" class="flex-1 relative bg-[#0b1120] overflow-hidden min-w-0">
+      <!-- 2D Blueprint Canvas -->
+      <canvas id="cadCanvas" class="w-full h-full"></canvas>
+
+      <!-- 3D MEP WebGL Canvas Container -->
+      <div id="view3DContainer" class="hidden absolute inset-0 bg-[#070c18]"></div>
+
+      <!-- Floating Top-Center Tool Hint Banner -->
+      <div id="toolHint" class="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur border border-slate-700/80 text-slate-200 px-3.5 py-1.5 rounded-full text-xs shadow-lg flex items-center gap-2 z-10 max-w-[90%] truncate">
+        <span class="w-2 h-2 rounded-full bg-sky-400 animate-pulse shrink-0"></span>
+        <span id="toolHintText">Click a room, duct, or pipe to inspect &amp; edit. Drag handles to resize or reroute.</span>
+      </div>
+
+      <!-- Floating Active Poly/Duct/Pipe Action Pill (2D) -->
+      <div id="drawingActions" class="hidden absolute top-12 left-1/2 -translate-x-1/2 bg-slate-900/95 border border-sky-500/50 rounded-full px-2 py-1 shadow-xl flex items-center gap-2 z-10">
+        <button id="btnFinishDraw" class="px-3 py-1 rounded-full bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium transition">Finish (Enter)</button>
+        <button id="btnCancelDraw" class="px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition">Cancel (Esc)</button>
+      </div>
+
+      <!-- 2D HUD: Bottom-Left Coordinates & Scale -->
+      <div id="hud2DLeft" class="pointer-events-none absolute bottom-3 left-3 flex items-center gap-2 z-10">
+        <div class="bg-slate-900/90 backdrop-blur border border-slate-700/80 rounded-lg px-2.5 py-1 text-[11px] font-mono text-slate-300 shadow">
+          X: <span id="hudX" class="text-sky-300">0.0</span> ft &nbsp;|&nbsp; Y: <span id="hudY" class="text-sky-300">0.0</span> ft
+        </div>
+        <div class="hidden sm:block bg-slate-900/90 backdrop-blur border border-slate-700/80 rounded-lg px-2.5 py-1 text-[11px] font-mono text-slate-400 shadow">
+          Zoom: <span id="hudZoom" class="text-slate-200">100%</span>
+        </div>
+      </div>
+
+      <!-- 2D HUD: Bottom-Right Zoom Controls -->
+      <div id="hud2DRight" class="absolute bottom-3 right-3 flex items-center gap-1 bg-slate-900/90 backdrop-blur border border-slate-700/80 rounded-lg p-1 shadow z-10">
+        <button id="btnZoomOut" class="w-7 h-7 rounded hover:bg-slate-800 text-slate-300 flex items-center justify-center font-mono text-sm" title="Zoom Out">-</button>
+        <button id="btnZoomFit" class="px-2 h-7 rounded hover:bg-slate-800 text-slate-300 text-[11px] font-medium" title="Fit Floorplan">Fit</button>
+        <button id="btnZoomIn" class="w-7 h-7 rounded hover:bg-slate-800 text-slate-300 flex items-center justify-center font-mono text-sm" title="Zoom In">+</button>
+      </div>
+
+      <!-- 3D HUD: Camera Presets & Layer Visibility Controls -->
+      <div id="hud3DControls" class="hidden absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 pointer-events-none z-10">
+        <div class="pointer-events-auto flex items-center gap-1 bg-slate-900/90 backdrop-blur border border-slate-700/80 rounded-lg p-1 shadow text-[11px]">
+          <button data-cam="iso" class="cam-btn px-2 py-1 rounded hover:bg-slate-800 text-sky-300 font-medium">Iso</button>
+          <button data-cam="top" class="cam-btn px-2 py-1 rounded hover:bg-slate-800 text-slate-300 font-medium">Top</button>
+          <button data-cam="front" class="cam-btn px-2 py-1 rounded hover:bg-slate-800 text-slate-300 font-medium">Front</button>
+          <button data-cam="side" class="cam-btn px-2 py-1 rounded hover:bg-slate-800 text-slate-300 font-medium">Side</button>
+        </div>
+
+        <div class="pointer-events-auto flex items-center gap-1.5 bg-slate-900/90 backdrop-blur border border-slate-700/80 rounded-lg p-1 shadow text-[11px]">
+          <button id="btn3DWalls" class="px-2 py-1 rounded bg-sky-600/30 text-sky-200 border border-sky-500/40 font-medium">Walls: X-Ray</button>
+          <button id="btn3DHvac" class="px-2 py-1 rounded bg-orange-500/20 text-orange-200 border border-orange-500/40 font-medium">HVAC</button>
+          <button id="btn3DPlumbing" class="px-2 py-1 rounded bg-cyan-500/20 text-cyan-200 border border-cyan-500/40 font-medium">Plumbing</button>
+        </div>
+      </div>
+
+      <!-- Toast Notification -->
+      <div id="toast" class="pointer-events-none opacity-0 transition-opacity duration-200 absolute bottom-14 left-1/2 -translate-x-1/2 bg-slate-800/95 border border-sky-500/40 text-sky-100 px-4 py-2 rounded-lg text-xs font-medium shadow-xl z-20">
+        Toast message
+      </div>
+    </main>
+
+    <!-- RIGHT PROPERTIES INSPECTOR PANEL -->
+    <aside id="inspectorPanel" class="w-64 lg:w-72 bg-slate-900/95 border-l border-slate-800 flex flex-col overflow-y-auto shrink-0 z-20 hidden md:flex">
+      <div class="px-3.5 py-2.5 border-b border-slate-800 flex items-center justify-between">
+        <h2 id="inspectorTitle" class="text-xs font-bold uppercase tracking-wider text-slate-300">Inspector</h2>
+        <span id="inspectorTypeBadge" class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400">NONE</span>
+      </div>
+      <div id="inspectorBody" class="p-3.5 flex-1 flex flex-col gap-3 text-xs">
+        <!-- Dynamically populated -->
+      </div>
+    </aside>
+  </div>
+
+  <!-- ==================== COLLAPSIBLE BOTTOM SCHEDULE DRAWER ==================== -->
+  <section id="scheduleDrawer" class="bg-slate-900 border-t border-slate-800 flex flex-col shrink-0 z-30 transition-all duration-200" style="height: 205px;">
+    <!-- Drawer Header -->
+    <div class="px-3 py-1.5 border-b border-slate-800 flex items-center justify-between bg-slate-900/95">
+      <div class="flex items-center gap-1.5 overflow-x-auto">
+        <button id="tabDucts" class="px-3 py-1 rounded-md text-xs font-semibold bg-sky-600/20 text-sky-300 border border-sky-500/30 transition whitespace-nowrap">
+          Duct Schedule (<span id="countDucts">0</span>)
+        </button>
+        <button id="tabPlumbing" class="px-3 py-1 rounded-md text-xs font-semibold text-slate-400 hover:text-slate-200 border border-transparent transition whitespace-nowrap">
+          Plumbing Schedule (<span id="countPipes">0</span>)
+        </button>
+        <button id="tabRooms" class="px-3 py-1 rounded-md text-xs font-semibold text-slate-400 hover:text-slate-200 border border-transparent transition whitespace-nowrap">
+          Room Schedule (<span id="countRooms">0</span>)
+        </button>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <button id="btnToggleInspectorMobile" class="md:hidden px-2.5 py-1 rounded bg-slate-800 text-slate-300 text-xs border border-slate-700">
+          Inspector
+        </button>
+        <button id="btnToggleSchedule" class="px-2.5 py-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white text-xs flex items-center gap-1 transition">
+          <span id="scheduleToggleLabel">Collapse</span>
+          <svg id="scheduleChevron" class="w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Drawer Table Content -->
+    <div id="scheduleBody" class="flex-1 overflow-auto">
+      <!-- Ducts Table -->
+      <table id="tableDucts" class="w-full text-left border-collapse text-xs">
+        <thead class="bg-slate-950/80 sticky top-0 text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-800">
+          <tr>
+            <th class="py-2 px-3">Duct ID</th>
+            <th class="py-2 px-2">System</th>
+            <th class="py-2 px-2">Shape</th>
+            <th class="py-2 px-2 text-right">Size</th>
+            <th class="py-2 px-2 text-right">Elev Z</th>
+            <th class="py-2 px-2 text-right">CFM</th>
+            <th class="py-2 px-2 text-right">Len (ft)</th>
+            <th class="py-2 px-2 text-right">Elbows</th>
+            <th class="py-2 px-2 text-right">Velocity</th>
+            <th class="py-2 px-2 text-right">Path Loss</th>
+            <th class="py-2 px-3 text-center">Status</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyDucts" class="divide-y divide-slate-800/70 font-mono text-[11px]"></tbody>
+      </table>
+
+      <!-- Plumbing Table -->
+      <table id="tablePlumbing" class="hidden w-full text-left border-collapse text-xs">
+        <thead class="bg-slate-950/80 sticky top-0 text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-800">
+          <tr>
+            <th class="py-2 px-3">Pipe ID</th>
+            <th class="py-2 px-2">System</th>
+            <th class="py-2 px-2 text-right">Diameter</th>
+            <th class="py-2 px-2 text-right">Start Z</th>
+            <th class="py-2 px-2 text-right">End Z</th>
+            <th class="py-2 px-2 text-right">Slope</th>
+            <th class="py-2 px-2 text-right">Run (ft)</th>
+            <th class="py-2 px-2 text-right">Elbows</th>
+            <th class="py-2 px-3 text-right">Total Drop</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyPlumbing" class="divide-y divide-slate-800/70 font-mono text-[11px]"></tbody>
+      </table>
+
+      <!-- Rooms Table -->
+      <table id="tableRooms" class="hidden w-full text-left border-collapse text-xs">
+        <thead class="bg-slate-950/80 sticky top-0 text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-800">
+          <tr>
+            <th class="py-2 px-3">Room Name</th>
+            <th class="py-2 px-2">Shape</th>
+            <th class="py-2 px-2 text-right">Area (ft²)</th>
+            <th class="py-2 px-2 text-right">Height (ft)</th>
+            <th class="py-2 px-2 text-right">Volume (ft³)</th>
+            <th class="py-2 px-2 text-right">ACH</th>
+            <th class="py-2 px-2 text-right">Exhaust CFM</th>
+            <th class="py-2 px-3 text-right">Return CFM</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyRooms" class="divide-y divide-slate-800/70 font-mono text-[11px]"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ==================== APPLICATION JAVASCRIPT ==================== -->
+  <script>
+    (() => {
+      'use strict';
+
+      // =========================================================================
+      // 1. CONSTANTS & STANDARD SIZING TABLES
+      // =========================================================================
+      const STANDARD_ROUND_IN = [
+        4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 40, 44, 48, 54, 60
+      ];
+
+      const RECT_HEIGHT_OPTIONS = [6, 8, 10, 12, 14, 16];
+
+      const STANDARD_RECT_IN = [
+        [6, 6], [8, 6], [8, 8], [10, 6], [10, 8], [12, 8], [12, 10], [14, 8], [14, 10],
+        [16, 10], [16, 12], [18, 12], [20, 12], [20, 14], [22, 14], [24, 14], [24, 16],
+        [26, 16], [28, 16], [28, 18], [30, 18], [32, 20], [36, 20], [36, 24], [40, 24],
+        [44, 24], [48, 24], [48, 30], [54, 30], [60, 30], [60, 36]
+      ];
+
+      const STANDARD_PIPE_IN = [
+        { val: 0.5, label: '1/2"' },
+        { val: 0.75, label: '3/4"' },
+        { val: 1, label: '1"' },
+        { val: 1.25, label: '1-1/4"' },
+        { val: 1.5, label: '1-1/2"' },
+        { val: 2, label: '2"' },
+        { val: 3, label: '3"' },
+        { val: 4, label: '4"' },
+        { val: 6, label: '6"' },
+      ];
+
+      const ELBOW_EQ_LEN_FT = 15;
+
+      const DUCT_COLORS = {
+        exhaust: { stroke: '#f97316', hex3d: 0xf97316, label: 'Exhaust', defaultZ: 8.5, badge: 'bg-orange-500/20 text-orange-300 border-orange-500/40' },
+        return:  { stroke: '#38bdf8', hex3d: 0x38bdf8, label: 'Return',  defaultZ: 9.2, badge: 'bg-sky-500/20 text-sky-300 border-sky-500/40' },
+      };
+
+      const PIPE_COLORS = {
+        cold:  { stroke: '#06b6d4', hex3d: 0x06b6d4, label: 'Cold Water', prefix: 'CW',  defaultZ: 7.6, defaultDia: 1,    defaultSlope: 0,    badge: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' },
+        hot:   { stroke: '#f43f5e', hex3d: 0xf43f5e, label: 'Hot Water',  prefix: 'HW',  defaultZ: 7.2, defaultDia: 0.75, defaultSlope: 0,    badge: 'bg-rose-500/20 text-rose-300 border-rose-500/40' },
+        drain: { stroke: '#a855f7', hex3d: 0xa855f7, label: 'Drain / DWV', prefix: 'DWV', defaultZ: 1.8, defaultDia: 3,    defaultSlope: 0.25, badge: 'bg-purple-500/20 text-purple-300 border-purple-500/40' },
+      };
+
+      // =========================================================================
+      // 2. APPLICATION STATE
+      // =========================================================================
+      const state = {
+        // View Mode
+        viewMode: '2d', // '2d' | '3d'
+        show3DWalls: 'xray', // 'xray' | 'solid' | 'wire'
+        show3DHvac: true,
+        show3DPlumbing: true,
+
+        // Global HVAC Design Constraints
+        maxVelocity: 800,
+        maxStaticLoss: 0.5,
+        returnRatioPct: 90,
+        ductShape: 'round',
+        rectMaxHeight: 'auto',
+
+        // 2D Viewport / Camera (World units = feet)
+        panX: 80,
+        panY: 70,
+        zoom: 18,
+
+        // Active Tool & CAD Toggles
+        tool: 'select',
+        snapGrid: true,
+        orthoSnap: true,
+
+        // Floorplan & MEP Entities
+        rooms: [],
+        ahu: null,
+        ducts: [],
+        pipes: [],
+
+        // Computed Results
+        computed: {
+          totalExhaustCfm: 0,
+          totalReturnCfm: 0,
+          totalFreshCfm: 0,
+          totalPlumbingLen: 0,
+          peakVelocity: 0,
+          maxPathStaticLoss: 0,
+          hasFailure: false,
+          clashes: [],
+          ductResults: {},
+          roomResults: {},
+          pipeResults: {},
+        },
+
+        // Selection & Dragging
+        selected: null, // { kind: 'room'|'duct'|'pipe'|'ahu', id?: string }
+        hoverSnap: null,
+        mouseWorld: { x: 0, y: 0 },
+        isDragging: false,
+        dragMode: null,
+        dragStartWorld: null,
+        dragStartScreen: null,
+        dragTargetMeta: null,
+        draftPoints: [],
+        draftRect: null,
+        draftCircle: null,
+        nextIdCounter: 1,
+        activeTab: 'ducts',
+        scheduleCollapsed: false,
+      };
+
+      // =========================================================================
+      // 3. DOM ELEMENTS
+      // =========================================================================
+      const canvas = document.getElementById('cadCanvas');
+      const ctx = canvas.getContext('2d');
+      const canvasContainer = document.getElementById('canvasContainer');
+      const view3DContainer = document.getElementById('view3DContainer');
+
+      const btnView2D = document.getElementById('btnView2D');
+      const btnView3D = document.getElementById('btnView3D');
+      const hud2DLeft = document.getElementById('hud2DLeft');
+      const hud2DRight = document.getElementById('hud2DRight');
+      const hud3DControls = document.getElementById('hud3DControls');
+
+      const inputMaxVel = document.getElementById('inputMaxVel');
+      const inputMaxStatic = document.getElementById('inputMaxStatic');
+      const inputReturnRatio = document.getElementById('inputReturnRatio');
+      const labelFreshRatio = document.getElementById('labelFreshRatio');
+      const btnShapeRound = document.getElementById('btnShapeRound');
+      const btnShapeRect = document.getElementById('btnShapeRect');
+      const selectGlobalRectHeight = document.getElementById('selectGlobalRectHeight');
+
+      const hudX = document.getElementById('hudX');
+      const hudY = document.getElementById('hudY');
+      const hudZoom = document.getElementById('hudZoom');
+      const toolHintText = document.getElementById('toolHintText');
+      const drawingActions = document.getElementById('drawingActions');
+
+      const inspectorPanel = document.getElementById('inspectorPanel');
+      const inspectorTitle = document.getElementById('inspectorTitle');
+      const inspectorTypeBadge = document.getElementById('inspectorTypeBadge');
+      const inspectorBody = document.getElementById('inspectorBody');
+
+      const toastEl = document.getElementById('toast');
+      let toastTimer = null;
+
+      function showToast(msg) {
+        toastEl.textContent = msg;
+        toastEl.classList.remove('opacity-0');
+        toastEl.classList.add('opacity-100');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+          toastEl.classList.remove('opacity-100');
+          toastEl.classList.add('opacity-0');
+        }, 2200);
+      }
+
+      function genId(prefix) {
+        return `${prefix}_${state.nextIdCounter++}`;
+      }
+
+      function formatPipeDia(val) {
+        const found = STANDARD_PIPE_IN.find((p) => Math.abs(p.val - val) < 0.01);
+        return found ? found.label : `${val}"`;
+      }
+
+      // =========================================================================
+      // 4. GEOMETRY & COORDINATE HELPERS
+      // =========================================================================
+      function worldToScreen(wx, wy) {
+        return {
+          x: wx * state.zoom + state.panX,
+          y: wy * state.zoom + state.panY,
+        };
+      }
+
+      function screenToWorld(sx, sy) {
+        return {
+          x: (sx - state.panX) / state.zoom,
+          y: (sy - state.panY) / state.zoom,
+        };
+      }
+
+      function dist(a, b) {
+        return Math.hypot(a.x - b.x, a.y - b.y);
+      }
+
+      function snapVal(v) {
+        return state.snapGrid ? Math.round(v) : Math.round(v * 4) / 4;
+      }
+
+      function pointToSegment(p, a, b) {
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const lenSq = dx * dx + dy * dy;
+        if (lenSq === 0) return { dist: dist(p, a), point: { x: a.x, y: a.y }, t: 0 };
+        let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq;
+        t = Math.max(0, Math.min(1, t));
+        const proj = { x: a.x + t * dx, y: a.y + t * dy };
+        return { dist: dist(p, proj), point: proj, t };
+      }
+
+      function pointToPolyline(p, pts) {
+        let best = { dist: Infinity, point: pts[0], segIdx: 0 };
+        for (let i = 0; i < pts.length - 1; i++) {
+          const res = pointToSegment(p, pts[i], pts[i + 1]);
+          if (res.dist < best.dist) {
+            best = { dist: res.dist, point: res.point, segIdx: i };
+          }
+        }
+        return best;
+      }
+
+      function polygonArea(pts) {
+        if (!pts || pts.length < 3) return 0;
+        let sum = 0;
+        for (let i = 0; i < pts.length; i++) {
+          const j = (i + 1) % pts.length;
+          sum += pts[i].x * pts[j].y - pts[j].x * pts[i].y;
+        }
+        return Math.abs(sum) / 2;
+      }
+
+      function polygonCentroid(pts) {
+        if (!pts || pts.length === 0) return { x: 0, y: 0 };
+        let cx = 0, cy = 0, a = 0;
+        for (let i = 0; i < pts.length; i++) {
+          const j = (i + 1) % pts.length;
+          const cross = pts[i].x * pts[j].y - pts[j].x * pts[i].y;
+          cx += (pts[i].x + pts[j].x) * cross;
+          cy += (pts[i].y + pts[j].y) * cross;
+          a += cross;
+        }
+        if (Math.abs(a) < 1e-5) {
+          return {
+            x: pts.reduce((s, p) => s + p.x, 0) / pts.length,
+            y: pts.reduce((s, p) => s + p.y, 0) / pts.length,
+          };
+        }
+        a *= 0.5;
+        return { x: cx / (6 * a), y: cy / (6 * a) };
+      }
+
+      function isPointInRoom(pt, room) {
+        if (room.shape === 'rect') {
+          return pt.x >= room.x && pt.x <= room.x + room.w && pt.y >= room.y && pt.y <= room.y + room.h;
+        }
+        if (room.shape === 'circle') {
+          return dist(pt, { x: room.cx, y: room.cy }) <= room.r;
+        }
+        if (room.shape === 'poly') {
+          const pts = room.points;
+          let inside = false;
+          for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+            const xi = pts[i].x, yi = pts[i].y;
+            const xj = pts[j].x, yj = pts[j].y;
+            const intersect = ((yi > pt.y) !== (yj > pt.y)) &&
+              (pt.x < (xj - xi) * (pt.y - yi) / ((yj - yi) || 1e-9) + xi);
+            if (intersect) inside = !inside;
+          }
+          return inside;
+        }
+        return false;
+      }
+
+      function getRoomArea(room) {
+        if (room.shape === 'rect') return Math.abs(room.w * room.h);
+        if (room.shape === 'circle') return Math.PI * room.r * room.r;
+        if (room.shape === 'poly') return polygonArea(room.points);
+        return 0;
+      }
+
+      function getRoomCenter(room) {
+        if (room.shape === 'rect') return { x: room.x + room.w / 2, y: room.y + room.h / 2 };
+        if (room.shape === 'circle') return { x: room.cx, y: room.cy };
+        if (room.shape === 'poly') return polygonCentroid(room.points);
+        return { x: 0, y: 0 };
+      }
+
+      function getPolylineLengthAndElbows(points) {
+        let length = 0;
+        let elbows = 0;
+        for (let i = 0; i < points.length - 1; i++) {
+          length += dist(points[i], points[i + 1]);
+        }
+        for (let i = 1; i < points.length - 1; i++) {
+          const v1 = { x: points[i].x - points[i - 1].x, y: points[i].y - points[i - 1].y };
+          const v2 = { x: points[i + 1].x - points[i].x, y: points[i + 1].y - points[i].y };
+          const m1 = Math.hypot(v1.x, v1.y);
+          const m2 = Math.hypot(v2.x, v2.y);
+          if (m1 > 0.01 && m2 > 0.01) {
+            const dot = Math.max(-1, Math.min(1, (v1.x * v2.x + v1.y * v2.y) / (m1 * m2)));
+            const angleDeg = Math.acos(dot) * (180 / Math.PI);
+            if (angleDeg > 20) elbows++;
+          }
+        }
+        return { length, elbows };
+      }
+
+      // =========================================================================
+      // 5. HVAC & PLUMBING ENGINEERING CALCULATION ENGINE
+      // =========================================================================
+      function calcFrictionRate(cfm, deInches) {
+        if (cfm <= 0 || deInches <= 0) return 0;
+        // ASHRAE galvanized steel duct friction loss (InWg per 100 ft)
+        return 0.109136 * Math.pow(cfm, 1.9) / Math.pow(deInches, 5.02);
+      }
+
+      function evaluateDuctSize(cfm, eqLenFt, sizeSpec, shape) {
+        let areaFt2 = 0;
+        let de = 0;
+        let sizeLabel = '';
+        let widthIn = 0;
+        let heightIn = 0;
+
+        if (shape === 'round') {
+          const d = Number(sizeSpec);
+          widthIn = d;
+          heightIn = d;
+          areaFt2 = (Math.PI * (d / 2) * (d / 2)) / 144;
+          de = d;
+          sizeLabel = `${d}" Ø`;
+        } else {
+          const [w, h] = sizeSpec;
+          widthIn = w;
+          heightIn = h;
+          areaFt2 = (w * h) / 144;
+          // Huebscher's equivalent round diameter equation
+          de = 1.30 * Math.pow(w * h, 0.625) / Math.pow(w + h, 0.25);
+          sizeLabel = `${w}"×${h}"`;
+        }
+
+        const velocity = areaFt2 > 0 ? cfm / areaFt2 : 0;
+        const friction = calcFrictionRate(cfm, de);
+        const segLoss = friction * (eqLenFt / 100);
+
+        return {
+          sizeLabel,
+          widthIn,
+          heightIn,
+          de,
+          areaFt2,
+          velocity,
+          friction,
+          segLoss,
+        };
+      }
+
+      function autoSizeDuct(cfm, eqLenFt, shape, maxVel, maxStatic, manualSize, targetRectHeight) {
+        if (cfm <= 0) {
+          return {
+            ...evaluateDuctSize(0, eqLenFt, shape === 'round' ? 6 : [6, 6], shape),
+            effectiveShape: shape,
+          };
+        }
+
+        // Manual override
+        if (manualSize) {
+          if (shape === 'round' && !isNaN(Number(manualSize))) {
+            return { ...evaluateDuctSize(cfm, eqLenFt, Number(manualSize), 'round'), effectiveShape: 'round' };
+          }
+          if (shape === 'rect' && typeof manualSize === 'string' && manualSize.includes('x')) {
+            const parts = manualSize.split('x').map(Number);
+            if (parts.length === 2 && parts[0] > 0 && parts[1] > 0) {
+              return { ...evaluateDuctSize(cfm, eqLenFt, parts, 'rect'), effectiveShape: 'rect' };
+            }
+          }
+        }
+
+        if (shape === 'round') {
+          let best = null;
+          for (const d of STANDARD_ROUND_IN) {
+            const res = evaluateDuctSize(cfm, eqLenFt, d, 'round');
+            best = res;
+            if (res.velocity <= maxVel && res.segLoss <= maxStatic) {
+              return { ...res, effectiveShape: 'round' };
+            }
+          }
+          return { ...best, effectiveShape: 'round' };
+        }
+
+        if (targetRectHeight && targetRectHeight !== 'auto') {
+          const h = Number(targetRectHeight);
+          let best = null;
+          for (let w = 6; w <= 72; w += 2) {
+            const res = evaluateDuctSize(cfm, eqLenFt, [w, h], 'rect');
+            best = res;
+            if (res.velocity <= maxVel && res.segLoss <= maxStatic) {
+              return { ...res, effectiveShape: 'rect' };
+            }
+          }
+          return { ...best, effectiveShape: 'rect' };
+        }
+
+        let best = null;
+        for (const spec of STANDARD_RECT_IN) {
+          const res = evaluateDuctSize(cfm, eqLenFt, spec, 'rect');
+          best = res;
+          if (res.velocity <= maxVel && res.segLoss <= maxStatic) {
+            return { ...res, effectiveShape: 'rect' };
+          }
+        }
+        return { ...best, effectiveShape: 'rect' };
+      }
+
+      /** Compute 3D polyline points for a plumbing pipe (applying slope or endZ) */
+      function computePipe3DPoints(pipe) {
+        const pts = pipe.points;
+        const startZ = Number(pipe.elevation ?? PIPE_COLORS[pipe.type].defaultZ);
+        const slope = Number(pipe.slopeInPerFt || 0);
+        const out = [];
+        let accumDist = 0;
+
+        for (let i = 0; i < pts.length; i++) {
+          if (i > 0) accumDist += dist(pts[i - 1], pts[i]);
+          let z = startZ;
+          if (pipe.type === 'drain' && slope > 0) {
+            z = Math.max(0.15, startZ - (accumDist * slope) / 12);
+          } else if (pipe.endElevation !== null && pipe.endElevation !== undefined && pipe.endElevation !== '') {
+            // Interpolate smoothly or drop at last vertex
+            const totalLen = getPolylineLengthAndElbows(pts).length || 1;
+            const endZ = Number(pipe.endElevation);
+            z = startZ + (endZ - startZ) * (accumDist / totalLen);
+          }
+          out.push({ x: pts[i].x, y: pts[i].y, z });
+        }
+        return out;
+      }
+
+      /** Detect 3D clearance clashes between HVAC ducts and Plumbing pipes */
+      function detectMepClashes(ductResults, pipeResults) {
+        const clashes = [];
+        for (const duct of state.ducts) {
+          const dRes = ductResults[duct.id];
+          if (!dRes) continue;
+          const dZ = Number(duct.elevation ?? DUCT_COLORS[duct.type].defaultZ);
+          const dHalfH = (dRes.heightIn / 12) / 2;
+          const dHalfW = (dRes.widthIn / 12) / 2;
+
+          for (const pipe of state.pipes) {
+            const pRes = pipeResults[pipe.id];
+            if (!pRes) continue;
+            const pRad = (pipe.diameterIn / 12) / 2;
+            const pts3d = pRes.points3d;
+
+            let hit = false;
+            for (let i = 0; i < duct.points.length - 1 && !hit; i++) {
+              const a1 = duct.points[i], a2 = duct.points[i + 1];
+              for (let j = 0; j < pts3d.length - 1 && !hit; j++) {
+                const b1 = pts3d[j], b2 = pts3d[j + 1];
+                // Sample 5 points along pipe segment to test 3D clearance
+                for (let s = 0; s <= 4; s++) {
+                  const t = s / 4;
+                  const px = b1.x + (b2.x - b1.x) * t;
+                  const py = b1.y + (b2.y - b1.y) * t;
+                  const pz = b1.z + (b2.z - b1.z) * t;
+                  const xyDist = pointToSegment({ x: px, y: py }, a1, a2).dist;
+                  const zDist = Math.abs(pz - dZ);
+                  if (xyDist < dHalfW + pRad + 0.08 && zDist < dHalfH + pRad + 0.08) {
+                    clashes.push({ ductId: duct.id, pipeId: pipe.id, x: px, y: py, z: pz });
+                    hit = true;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        }
+        return clashes;
+      }
+
+      function recalculateSystem() {
+        try {
+          const returnRatio = Math.max(0, Math.min(100, state.returnRatioPct)) / 100;
+          const freshRatio = 1 - returnRatio;
+
+          // 1. Rooms
+          const roomResults = {};
+          let totalRoomExhaustCfm = 0;
+          for (const room of state.rooms) {
+            const area = getRoomArea(room);
+            const volume = area * room.height;
+            const exhaustCfm = (volume * room.ach) / 60;
+            const returnCfm = exhaustCfm * returnRatio;
+            roomResults[room.id] = { area, volume, exhaustCfm, returnCfm };
+            totalRoomExhaustCfm += exhaustCfm;
+          }
+
+          const totalExhaustCfm = totalRoomExhaustCfm;
+          const totalReturnCfm = totalExhaustCfm * returnRatio;
+          const totalFreshCfm = totalExhaustCfm * freshRatio;
+
+          // 2. Duct Network Accumulation
+          const ductResults = {};
+          const ahuCenter = state.ahu ? { x: state.ahu.x + state.ahu.w / 2, y: state.ahu.y + state.ahu.h / 2 } : null;
+          const ahuRadius = state.ahu ? Math.max(state.ahu.w, state.ahu.h) / 2 + 1.2 : 0;
+          const isNearAhu = (pt) => ahuCenter && dist(pt, ahuCenter) <= ahuRadius;
+
+          ['exhaust', 'return'].forEach((ductType) => {
+            const typeDucts = state.ducts.filter((d) => d.type === ductType);
+            if (typeDucts.length === 0) return;
+
+            const adj = {};
+            typeDucts.forEach((d) => { adj[d.id] = new Set(); });
+
+            for (let i = 0; i < typeDucts.length; i++) {
+              for (let j = i + 1; j < typeDucts.length; j++) {
+                const dA = typeDucts[i];
+                const dB = typeDucts[j];
+                const aStart = dA.points[0];
+                const aEnd = dA.points[dA.points.length - 1];
+                const bStart = dB.points[0];
+                const bEnd = dB.points[dB.points.length - 1];
+
+                const touch =
+                  pointToPolyline(aStart, dB.points).dist <= 0.9 ||
+                  pointToPolyline(aEnd, dB.points).dist <= 0.9 ||
+                  pointToPolyline(bStart, dA.points).dist <= 0.9 ||
+                  pointToPolyline(bEnd, dA.points).dist <= 0.9;
+
+                if (touch) {
+                  adj[dA.id].add(dB.id);
+                  adj[dB.id].add(dA.id);
+                }
+              }
+            }
+
+            const parentOf = {};
+            const childrenOf = {};
+            const visited = new Set();
+            const queue = [];
+
+            typeDucts.forEach((d) => {
+              childrenOf[d.id] = [];
+              const s = d.points[0];
+              const e = d.points[d.points.length - 1];
+              if (isNearAhu(s) || isNearAhu(e)) {
+                visited.add(d.id);
+                parentOf[d.id] = null;
+                queue.push(d.id);
+              }
+            });
+
+            while (queue.length > 0) {
+              const cur = queue.shift();
+              for (const nb of adj[cur]) {
+                if (!visited.has(nb)) {
+                  visited.add(nb);
+                  parentOf[nb] = cur;
+                  childrenOf[cur].push(nb);
+                  queue.push(nb);
+                }
+              }
+            }
+
+            const ductRoomMatch = {};
+            const roomTerminalCounts = {};
+
+            for (const d of typeDucts) {
+              const pStart = d.points[0];
+              const pEnd = d.points[d.points.length - 1];
+              let candidatePts = [pStart, pEnd];
+              if (ahuCenter) {
+                if (isNearAhu(pStart) && !isNearAhu(pEnd)) candidatePts = [pEnd];
+                else if (isNearAhu(pEnd) && !isNearAhu(pStart)) candidatePts = [pStart];
+                else if (parentOf[d.id]) {
+                  const pDuct = typeDucts.find((x) => x.id === parentOf[d.id]);
+                  if (pDuct) {
+                    const ds = pointToPolyline(pStart, pDuct.points).dist;
+                    const de = pointToPolyline(pEnd, pDuct.points).dist;
+                    candidatePts = ds < de ? [pEnd] : [pStart];
+                  }
+                }
+              }
+
+              let matchedRoom = null;
+              for (const pt of candidatePts) {
+                for (const room of state.rooms) {
+                  if (isPointInRoom(pt, room)) {
+                    matchedRoom = room;
+                    break;
+                  }
+                }
+                if (matchedRoom) break;
+              }
+
+              if (matchedRoom) {
+                ductRoomMatch[d.id] = matchedRoom.id;
+                roomTerminalCounts[matchedRoom.id] = (roomTerminalCounts[matchedRoom.id] || 0) + 1;
+              }
+            }
+
+            const localCfm = {};
+            for (const d of typeDucts) {
+              if (d.manualCfm !== null && d.manualCfm !== '' && !isNaN(Number(d.manualCfm))) {
+                localCfm[d.id] = Math.max(0, Number(d.manualCfm));
+              } else if (ductRoomMatch[d.id]) {
+                const rId = ductRoomMatch[d.id];
+                const rRes = roomResults[rId];
+                const base = ductType === 'exhaust' ? rRes.exhaustCfm : rRes.returnCfm;
+                localCfm[d.id] = base / (roomTerminalCounts[rId] || 1);
+              } else {
+                localCfm[d.id] = 0;
+              }
+            }
+
+            const totalCfmMap = {};
+            function computeAccum(id, stack = new Set()) {
+              if (totalCfmMap[id] !== undefined) return totalCfmMap[id];
+              if (stack.has(id)) return localCfm[id] || 0;
+              stack.add(id);
+              const d = typeDucts.find((x) => x.id === id);
+              let sum = localCfm[id] || 0;
+              if (d && (d.manualCfm === null || d.manualCfm === '')) {
+                for (const childId of (childrenOf[id] || [])) {
+                  sum += computeAccum(childId, stack);
+                }
+              }
+              totalCfmMap[id] = sum;
+              return sum;
+            }
+            typeDucts.forEach((d) => computeAccum(d.id));
+
+            for (const d of typeDucts) {
+              const { length, elbows } = getPolylineLengthAndElbows(d.points);
+              const eqLength = length + elbows * ELBOW_EQ_LEN_FT;
+              const cfm = totalCfmMap[d.id] || 0;
+              const effShape = (d.shapeOverride && d.shapeOverride !== 'global') ? d.shapeOverride : state.ductShape;
+              const effRectHeight = (d.rectHeight && d.rectHeight !== 'global') ? d.rectHeight : state.rectMaxHeight;
+
+              const sizing = autoSizeDuct(
+                cfm, eqLength, effShape, state.maxVelocity, state.maxStaticLoss, d.manualSize, effRectHeight
+              );
+
+              let flowReversed = false;
+              if (ahuCenter) {
+                const s = d.points[0];
+                const e = d.points[d.points.length - 1];
+                if (isNearAhu(s) && !isNearAhu(e)) {
+                  flowReversed = true;
+                } else if (parentOf[d.id]) {
+                  const pDuct = typeDucts.find((x) => x.id === parentOf[d.id]);
+                  if (pDuct && pointToPolyline(s, pDuct.points).dist < pointToPolyline(e, pDuct.points).dist) {
+                    flowReversed = true;
+                  }
+                }
+              }
+
+              ductResults[d.id] = {
+                id: d.id,
+                cfm,
+                localCfm: localCfm[d.id] || 0,
+                length,
+                elbows,
+                eqLength,
+                ...sizing,
+                parentId: parentOf[d.id] || null,
+                roomId: ductRoomMatch[d.id] || null,
+                pathLoss: sizing.segLoss,
+                flowReversed,
+                velFail: false,
+                lossFail: false,
+                status: 'PASS',
+              };
+            }
+
+            for (const d of typeDucts) {
+              let totalLoss = 0;
+              let cur = d.id;
+              const guard = new Set();
+              while (cur && !guard.has(cur)) {
+                guard.add(cur);
+                const r = ductResults[cur];
+                if (!r) break;
+                totalLoss += r.segLoss;
+                cur = r.parentId;
+              }
+              const res = ductResults[d.id];
+              res.pathLoss = totalLoss;
+              res.velFail = res.velocity > state.maxVelocity + 0.5;
+              res.lossFail = res.pathLoss > state.maxStaticLoss + 0.0005;
+              if (res.velFail || res.lossFail) {
+                res.status = 'FAIL';
+              } else if (res.velocity > state.maxVelocity * 0.9 || res.pathLoss > state.maxStaticLoss * 0.9) {
+                res.status = 'WARN';
+              } else {
+                res.status = 'PASS';
+              }
+            }
+          });
+
+          // 3. Plumbing Pipes
+          const pipeResults = {};
+          let totalPlumbingLen = 0;
+          for (const pipe of state.pipes) {
+            const { length, elbows } = getPolylineLengthAndElbows(pipe.points);
+            const points3d = computePipe3DPoints(pipe);
+            const startZ = points3d[0]?.z ?? 0;
+            const endZ = points3d[points3d.length - 1]?.z ?? startZ;
+            const dropIn = Math.max(0, (startZ - endZ) * 12);
+            let len3d = 0;
+            for (let i = 0; i < points3d.length - 1; i++) {
+              len3d += Math.hypot(
+                points3d[i + 1].x - points3d[i].x,
+                points3d[i + 1].y - points3d[i].y,
+                points3d[i + 1].z - points3d[i].z
+              );
+            }
+            totalPlumbingLen += len3d;
+            pipeResults[pipe.id] = {
+              length,
+              len3d,
+              elbows,
+              startZ,
+              endZ,
+              dropIn,
+              points3d,
+            };
+          }
+
+          // 4. 3D Clearance Clashes
+          const clashes = detectMepClashes(ductResults, pipeResults);
+
+          // 5. KPIs
+          let peakVelocity = 0;
+          let maxPathStaticLoss = 0;
+          let hasFailure = false;
+          Object.values(ductResults).forEach((r) => {
+            if (r.velocity > peakVelocity) peakVelocity = r.velocity;
+            if (r.pathLoss > maxPathStaticLoss) maxPathStaticLoss = r.pathLoss;
+            if (r.status === 'FAIL') hasFailure = true;
+          });
+
+          state.computed = {
+            totalExhaustCfm,
+            totalReturnCfm,
+            totalFreshCfm,
+            totalPlumbingLen,
+            peakVelocity,
+            maxPathStaticLoss,
+            hasFailure,
+            clashes,
+            ductResults,
+            roomResults,
+            pipeResults,
+          };
+
+          updateSummaryUI();
+          updateScheduleUI();
+          updateInspectorUI();
+          render();
+          if (state.viewMode === '3d') {
+            rebuild3DScene();
+          }
+        } catch (err) {
+          console.error('Calculation error:', err);
+          showToast('Calculation error — check inputs');
+        }
+      }
+
+      // =========================================================================
+      // 6. 2D CANVAS RENDERING ENGINE
+      // =========================================================================
+      function resizeCanvas() {
+        const rect = canvasContainer.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+        canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+        canvas.style.width = `${rect.width}px`;
+        canvas.style.height = `${rect.height}px`;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        render();
+
+        if (threeCtx.renderer && threeCtx.camera) {
+          threeCtx.camera.aspect = Math.max(1, rect.width) / Math.max(1, rect.height);
+          threeCtx.camera.updateProjectionMatrix();
+          threeCtx.renderer.setSize(rect.width, rect.height);
+        }
+      }
+
+      function render() {
+        if (state.viewMode !== '2d') return;
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+        if (!w || !h) return;
+
+        ctx.fillStyle = '#0b1120';
+        ctx.fillRect(0, 0, w, h);
+
+        drawGridAndRulers(w, h);
+        drawRooms();
+        drawPipes2D();
+        drawDucts();
+        drawEquipment();
+        drawDraftGeometry();
+        drawSnapIndicator();
+      }
+
+      function drawGridAndRulers(w, h) {
+        const z = state.zoom;
+        const startX = Math.floor(-state.panX / z) - 1;
+        const endX = Math.ceil((w - state.panX) / z) + 1;
+        const startY = Math.floor(-state.panY / z) - 1;
+        const endY = Math.ceil((h - state.panY) / z) + 1;
+
+        if (z >= 8) {
+          ctx.beginPath();
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.06)';
+          ctx.lineWidth = 1;
+          for (let gx = startX; gx <= endX; gx++) {
+            if (gx % 5 === 0) continue;
+            const sx = Math.round(gx * z + state.panX) + 0.5;
+            ctx.moveTo(sx, 0); ctx.lineTo(sx, h);
+          }
+          for (let gy = startY; gy <= endY; gy++) {
+            if (gy % 5 === 0) continue;
+            const sy = Math.round(gy * z + state.panY) + 0.5;
+            ctx.moveTo(0, sy); ctx.lineTo(w, sy);
+          }
+          ctx.stroke();
+        }
+
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.14)';
+        ctx.lineWidth = 1;
+        for (let gx = startX; gx <= endX; gx++) {
+          if (gx % 5 !== 0) continue;
+          const sx = Math.round(gx * z + state.panX) + 0.5;
+          ctx.moveTo(sx, 0); ctx.lineTo(sx, h);
+        }
+        for (let gy = startY; gy <= endY; gy++) {
+          if (gy % 5 !== 0) continue;
+          const sy = Math.round(gy * z + state.panY) + 0.5;
+          ctx.moveTo(0, sy); ctx.lineTo(w, sy);
+        }
+        ctx.stroke();
+
+        const ox = Math.round(state.panX) + 0.5;
+        const oy = Math.round(state.panY) + 0.5;
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.32)';
+        ctx.lineWidth = 1.25;
+        ctx.moveTo(ox, 0); ctx.lineTo(ox, h);
+        ctx.moveTo(0, oy); ctx.lineTo(w, oy);
+        ctx.stroke();
+
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+        ctx.fillRect(0, 0, w, 20);
+        ctx.fillRect(0, 0, 28, h);
+        ctx.fillStyle = '#64748b';
+        ctx.font = '10px "JetBrains Mono", monospace';
+
+        const step = z < 10 ? 10 : 5;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (let gx = Math.floor(startX / step) * step; gx <= endX; gx += step) {
+          const sx = gx * z + state.panX;
+          if (sx < 30 || sx > w - 10) continue;
+          ctx.fillText(`${gx}'`, sx, 10);
+        }
+        ctx.textAlign = 'right';
+        for (let gy = Math.floor(startY / step) * step; gy <= endY; gy += step) {
+          const sy = gy * z + state.panY;
+          if (sy < 24 || sy > h - 10) continue;
+          ctx.fillText(`${gy}'`, 24, sy);
+        }
+      }
+
+      function drawRooms() {
+        for (const room of state.rooms) {
+          const isSel = state.selected && state.selected.kind === 'room' && state.selected.id === room.id;
+          const res = state.computed.roomResults[room.id] || { area: 0, exhaustCfm: 0 };
+
+          ctx.save();
+          ctx.beginPath();
+          if (room.shape === 'rect') {
+            const p = worldToScreen(room.x, room.y);
+            ctx.rect(p.x, p.y, room.w * state.zoom, room.h * state.zoom);
+          } else if (room.shape === 'circle') {
+            const c = worldToScreen(room.cx, room.cy);
+            ctx.arc(c.x, c.y, room.r * state.zoom, 0, Math.PI * 2);
+          } else if (room.shape === 'poly' && room.points.length >= 3) {
+            const p0 = worldToScreen(room.points[0].x, room.points[0].y);
+            ctx.moveTo(p0.x, p0.y);
+            for (let i = 1; i < room.points.length; i++) {
+              const pi = worldToScreen(room.points[i].x, room.points[i].y);
+              ctx.lineTo(pi.x, pi.y);
+            }
+            ctx.closePath();
+          }
+
+          ctx.fillStyle = isSel ? 'rgba(56, 189, 248, 0.16)' : 'rgba(30, 58, 138, 0.22)';
+          ctx.fill();
+          ctx.lineWidth = isSel ? 2.5 : 1.75;
+          ctx.strokeStyle = isSel ? '#fbbf24' : '#38bdf8';
+          ctx.stroke();
+
+          ctx.fillStyle = '#94a3b8';
+          ctx.font = '10px "JetBrains Mono", monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+
+          if (room.shape === 'rect') {
+            const topMid = worldToScreen(room.x + room.w / 2, room.y);
+            const leftMid = worldToScreen(room.x, room.y + room.h / 2);
+            ctx.fillText(`${room.w.toFixed(1).replace(/\.0$/, '')} ft`, topMid.x, topMid.y - 9);
+            ctx.save();
+            ctx.translate(leftMid.x - 10, leftMid.y);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText(`${room.h.toFixed(1).replace(/\.0$/, '')} ft`, 0, 0);
+            ctx.restore();
+          } else if (room.shape === 'circle') {
+            const topMid = worldToScreen(room.cx, room.cy - room.r);
+            ctx.fillText(`Ø ${(room.r * 2).toFixed(1).replace(/\.0$/, '')} ft`, topMid.x, topMid.y - 9);
+          }
+
+          const center = worldToScreen(getRoomCenter(room).x, getRoomCenter(room).y);
+          ctx.fillStyle = '#f8fafc';
+          ctx.font = '600 12px Inter, sans-serif';
+          ctx.fillText(room.name, center.x, center.y - 12);
+
+          ctx.fillStyle = '#94a3b8';
+          ctx.font = '10px "JetBrains Mono", monospace';
+          ctx.fillText(`${Math.round(res.area)} ft² • ${room.ach} ACH`, center.x, center.y + 2);
+
+          ctx.fillStyle = '#38bdf8';
+          ctx.font = '600 11px "JetBrains Mono", monospace';
+          ctx.fillText(`${Math.round(res.exhaustCfm)} CFM`, center.x, center.y + 16);
+
+          if (isSel) {
+            ctx.fillStyle = '#fbbf24';
+            ctx.strokeStyle = '#0f172a';
+            ctx.lineWidth = 1.5;
+            if (room.shape === 'rect') {
+              const corners = [
+                { x: room.x, y: room.y },
+                { x: room.x + room.w, y: room.y },
+                { x: room.x + room.w, y: room.y + room.h },
+                { x: room.x, y: room.y + room.h },
+              ];
+              corners.forEach((c) => {
+                const s = worldToScreen(c.x, c.y);
+                ctx.fillRect(s.x - 4.5, s.y - 4.5, 9, 9);
+                ctx.strokeRect(s.x - 4.5, s.y - 4.5, 9, 9);
+              });
+            } else if (room.shape === 'circle') {
+              const handle = worldToScreen(room.cx + room.r, room.cy);
+              ctx.beginPath();
+              ctx.arc(handle.x, handle.y, 5.5, 0, Math.PI * 2);
+              ctx.fill(); ctx.stroke();
+            } else if (room.shape === 'poly') {
+              room.points.forEach((pt) => {
+                const s = worldToScreen(pt.x, pt.y);
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, 5, 0, Math.PI * 2);
+                ctx.fill(); ctx.stroke();
+              });
+            }
+          }
+          ctx.restore();
+        }
+      }
+
+      function drawPipes2D() {
+        for (const pipe of state.pipes) {
+          if (pipe.points.length < 2) continue;
+          const isSel = state.selected && state.selected.kind === 'pipe' && state.selected.id === pipe.id;
+          const ci = PIPE_COLORS[pipe.type] || PIPE_COLORS.cold;
+          const res = state.computed.pipeResults[pipe.id];
+
+          ctx.save();
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+
+          if (isSel) {
+            ctx.beginPath();
+            pipe.points.forEach((pt, idx) => {
+              const s = worldToScreen(pt.x, pt.y);
+              if (idx === 0) ctx.moveTo(s.x, s.y);
+              else ctx.lineTo(s.x, s.y);
+            });
+            ctx.strokeStyle = 'rgba(251, 191, 36, 0.35)';
+            ctx.lineWidth = 9;
+            ctx.stroke();
+          }
+
+          ctx.beginPath();
+          pipe.points.forEach((pt, idx) => {
+            const s = worldToScreen(pt.x, pt.y);
+            if (idx === 0) ctx.moveTo(s.x, s.y);
+            else ctx.lineTo(s.x, s.y);
+          });
+          if (pipe.type === 'drain') ctx.setLineDash([7, 4]);
+          ctx.strokeStyle = isSel ? '#fbbf24' : ci.stroke;
+          ctx.lineWidth = isSel ? 3.5 : 2.5;
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // Endpoints
+          [pipe.points[0], pipe.points[pipe.points.length - 1]].forEach((pt) => {
+            const s = worldToScreen(pt.x, pt.y);
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, 3.5, 0, Math.PI * 2);
+            ctx.fillStyle = ci.stroke;
+            ctx.fill();
+          });
+
+          // Inline label on longest segment
+          let longestIdx = 0, longestLen = 0;
+          for (let i = 0; i < pipe.points.length - 1; i++) {
+            const d = dist(pipe.points[i], pipe.points[i + 1]);
+            if (d > longestLen) { longestLen = d; longestIdx = i; }
+          }
+          if (longestLen * state.zoom > 38) {
+            const a = worldToScreen(pipe.points[longestIdx].x, pipe.points[longestIdx].y);
+            const b = worldToScreen(pipe.points[longestIdx + 1].x, pipe.points[longestIdx + 1].y);
+            const midX = (a.x + b.x) / 2;
+            const midY = (a.y + b.y) / 2;
+            const zTxt = res ? `Z:${res.startZ.toFixed(1)}'` : '';
+            const label = `${pipe.name} • ${formatPipeDia(pipe.diameterIn)} • ${zTxt}`;
+            ctx.font = '600 9.5px "JetBrains Mono", monospace';
+            const tw = ctx.measureText(label).width + 8;
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+            ctx.strokeStyle = ci.stroke;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.roundRect(midX - tw / 2, midY + 6, tw, 15, 3);
+            ctx.fill(); ctx.stroke();
+            ctx.fillStyle = '#e2e8f0';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, midX, midY + 13.5);
+          }
+
+          if (isSel) {
+            pipe.points.forEach((pt) => {
+              const s = worldToScreen(pt.x, pt.y);
+              ctx.beginPath();
+              ctx.arc(s.x, s.y, 5, 0, Math.PI * 2);
+              ctx.fillStyle = '#fbbf24';
+              ctx.fill();
+              ctx.strokeStyle = '#0f172a';
+              ctx.lineWidth = 1.5;
+              ctx.stroke();
+            });
+          }
+          ctx.restore();
+        }
+      }
+
+      function drawDucts() {
+        for (const duct of state.ducts) {
+          if (duct.points.length < 2) continue;
+          const isSel = state.selected && state.selected.kind === 'duct' && state.selected.id === duct.id;
+          const res = state.computed.ductResults[duct.id];
+          const colorInfo = DUCT_COLORS[duct.type] || DUCT_COLORS.exhaust;
+          const isFail = res && res.status === 'FAIL';
+          const strokeColor = isFail ? '#ef4444' : colorInfo.stroke;
+
+          ctx.save();
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+
+          if (isSel || isFail) {
+            ctx.beginPath();
+            duct.points.forEach((pt, idx) => {
+              const s = worldToScreen(pt.x, pt.y);
+              if (idx === 0) ctx.moveTo(s.x, s.y);
+              else ctx.lineTo(s.x, s.y);
+            });
+            ctx.strokeStyle = isFail ? 'rgba(239, 68, 68, 0.35)' : 'rgba(251, 191, 36, 0.35)';
+            ctx.lineWidth = 11;
+            ctx.stroke();
+          }
+
+          ctx.beginPath();
+          duct.points.forEach((pt, idx) => {
+            const s = worldToScreen(pt.x, pt.y);
+            if (idx === 0) ctx.moveTo(s.x, s.y);
+            else ctx.lineTo(s.x, s.y);
+          });
+          ctx.strokeStyle = isSel ? '#fbbf24' : strokeColor;
+          ctx.lineWidth = isSel ? 4.5 : 3.5;
+          ctx.stroke();
+
+          [duct.points[0], duct.points[duct.points.length - 1]].forEach((pt) => {
+            const p = worldToScreen(pt.x, pt.y);
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+            ctx.fillStyle = '#0f172a';
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = strokeColor;
+            ctx.stroke();
+          });
+
+          let longestIdx = 0, longestLen = 0;
+          for (let i = 0; i < duct.points.length - 1; i++) {
+            const d = dist(duct.points[i], duct.points[i + 1]);
+            if (d > longestLen) { longestLen = d; longestIdx = i; }
+          }
+          const a = worldToScreen(duct.points[longestIdx].x, duct.points[longestIdx].y);
+          const b = worldToScreen(duct.points[longestIdx + 1].x, duct.points[longestIdx + 1].y);
+          const midX = (a.x + b.x) / 2;
+          const midY = (a.y + b.y) / 2;
+          let angle = Math.atan2(b.y - a.y, b.x - a.x);
+          if (res && res.flowReversed) angle += Math.PI;
+
+          ctx.save();
+          ctx.translate(midX, midY);
+          ctx.rotate(angle);
+          ctx.fillStyle = isSel ? '#fbbf24' : strokeColor;
+          ctx.beginPath();
+          ctx.moveTo(6, 0); ctx.lineTo(-4, -4.5); ctx.lineTo(-4, 4.5);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+
+          if (res && longestLen * state.zoom > 34) {
+            const labelText = res.cfm > 0
+              ? `${res.sizeLabel} • ${Math.round(res.cfm)} CFM • ${Math.round(res.velocity)} FPM`
+              : `${res.length.toFixed(0)} ft`;
+            ctx.font = '600 10px "JetBrains Mono", monospace';
+            const tw = ctx.measureText(labelText).width + 10;
+            const th = 16;
+            const lx = midX - tw / 2;
+            const ly = midY - 22;
+
+            ctx.fillStyle = isFail ? 'rgba(127, 29, 29, 0.92)' : 'rgba(15, 23, 42, 0.9)';
+            ctx.strokeStyle = isFail ? '#ef4444' : strokeColor;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.roundRect(lx, ly, tw, th, 4);
+            ctx.fill(); ctx.stroke();
+
+            ctx.fillStyle = isFail ? '#fecaca' : '#f1f5f9';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(labelText, midX, ly + th / 2 + 0.5);
+          }
+
+          if (isSel) {
+            duct.points.forEach((pt) => {
+              const s = worldToScreen(pt.x, pt.y);
+              ctx.beginPath();
+              ctx.arc(s.x, s.y, 5, 0, Math.PI * 2);
+              ctx.fillStyle = '#fbbf24';
+              ctx.fill();
+              ctx.strokeStyle = '#0f172a';
+              ctx.lineWidth = 1.5;
+              ctx.stroke();
+            });
+          }
+          ctx.restore();
+        }
+      }
+
+      function drawEquipment() {
+        if (!state.ahu) return;
+        const isSel = state.selected && state.selected.kind === 'ahu';
+        const p = worldToScreen(state.ahu.x, state.ahu.y);
+        const pw = state.ahu.w * state.zoom;
+        const ph = state.ahu.h * state.zoom;
+
+        ctx.save();
+        ctx.fillStyle = 'rgba(79, 70, 229, 0.28)';
+        ctx.strokeStyle = isSel ? '#fbbf24' : '#818cf8';
+        ctx.lineWidth = isSel ? 2.5 : 2;
+        ctx.beginPath();
+        ctx.roundRect(p.x, p.y, pw, ph, 6);
+        ctx.fill(); ctx.stroke();
+
+        const cx = p.x + pw / 2;
+        const cy = p.y + ph / 2;
+        const r = Math.min(pw, ph) * 0.26;
+        ctx.beginPath();
+        ctx.arc(cx, cy - 4, Math.max(5, r), 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(165, 180, 252, 0.7)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.fillStyle = '#e0e7ff';
+        ctx.font = '700 11px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('AHU', cx, cy + Math.max(10, r + 6));
+        ctx.restore();
+      }
+
+      function drawDraftGeometry() {
+        if (state.draftRect) {
+          const r = state.draftRect;
+          const x = Math.min(r.x1, r.x2);
+          const y = Math.min(r.y1, r.y2);
+          const w = Math.abs(r.x2 - r.x1);
+          const h = Math.abs(r.y2 - r.y1);
+          const p = worldToScreen(x, y);
+
+          ctx.save();
+          ctx.setLineDash([5, 4]);
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.14)';
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 2;
+          ctx.fillRect(p.x, p.y, w * state.zoom, h * state.zoom);
+          ctx.strokeRect(p.x, p.y, w * state.zoom, h * state.zoom);
+          ctx.setLineDash([]);
+
+          ctx.fillStyle = '#e0f2fe';
+          ctx.font = '600 11px "JetBrains Mono", monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText(`${w.toFixed(1)} ft × ${h.toFixed(1)} ft (${Math.round(w * h)} ft²)`, p.x + (w * state.zoom) / 2, p.y - 10);
+          ctx.restore();
+        }
+
+        if (state.draftCircle) {
+          const c = state.draftCircle;
+          const s = worldToScreen(c.cx, c.cy);
+          ctx.save();
+          ctx.setLineDash([5, 4]);
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, c.r * state.zoom, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.14)';
+          ctx.fill();
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          ctx.fillStyle = '#e0f2fe';
+          ctx.font = '600 11px "JetBrains Mono", monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText(`R = ${c.r.toFixed(1)} ft (Ø ${(c.r * 2).toFixed(1)} ft)`, s.x, s.y - c.r * state.zoom - 10);
+          ctx.restore();
+        }
+
+        if (state.draftPoints.length > 0) {
+          const isDuct = state.tool.startsWith('duct_');
+          const isPipe = state.tool.startsWith('pipe_');
+          let stroke = '#38bdf8';
+          if (isDuct) stroke = DUCT_COLORS[state.tool.replace('duct_', '')].stroke;
+          if (isPipe) stroke = PIPE_COLORS[state.tool.replace('pipe_', '')].stroke;
+
+          const previewPt = getConstrainedPoint(state.mouseWorld, state.draftPoints[state.draftPoints.length - 1], isDuct || isPipe);
+          const pts = [...state.draftPoints, previewPt];
+
+          ctx.save();
+          ctx.beginPath();
+          pts.forEach((pt, idx) => {
+            const s = worldToScreen(pt.x, pt.y);
+            if (idx === 0) ctx.moveTo(s.x, s.y);
+            else ctx.lineTo(s.x, s.y);
+          });
+          ctx.strokeStyle = stroke;
+          ctx.lineWidth = isDuct ? 3.5 : isPipe ? 2.5 : 2;
+          ctx.setLineDash([6, 4]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          state.draftPoints.forEach((pt, idx) => {
+            const s = worldToScreen(pt.x, pt.y);
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, idx === 0 && !isDuct && !isPipe ? 6 : 4, 0, Math.PI * 2);
+            ctx.fillStyle = idx === 0 && !isDuct && !isPipe ? '#10b981' : stroke;
+            ctx.fill();
+          });
+
+          const last = state.draftPoints[state.draftPoints.length - 1];
+          const segLen = dist(last, previewPt);
+          if (segLen > 0.2) {
+            const m = worldToScreen((last.x + previewPt.x) / 2, (last.y + previewPt.y) / 2);
+            ctx.fillStyle = '#f8fafc';
+            ctx.font = '600 11px "JetBrains Mono", monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${segLen.toFixed(1)} ft`, m.x, m.y - 10);
+          }
+          ctx.restore();
+        }
+      }
+
+      function drawSnapIndicator() {
+        if (!state.hoverSnap) return;
+        const s = worldToScreen(state.hoverSnap.x, state.hoverSnap.y);
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, 7, 0, Math.PI * 2);
+        ctx.strokeStyle = '#fbbf24';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        if (state.hoverSnap.label) {
+          ctx.fillStyle = '#fbbf24';
+          ctx.font = '600 10px "JetBrains Mono", monospace';
+          ctx.textAlign = 'left';
+          ctx.fillText(state.hoverSnap.label, s.x + 10, s.y - 6);
+        }
+        ctx.restore();
+      }
+
+      // =========================================================================
+      // 7. 3D THREE.JS MEP RENDERER & ORBIT CONTROLLER
+      // =========================================================================
+      const threeCtx = {
+        initialized: false,
+        scene: null,
+        camera: null,
+        renderer: null,
+        rootGroup: null,
+        pickables: [],
+        raycaster: null,
+        // Orbit camera spherical state (World coords: X = right, Y = elevation up, Z = floorplan Y)
+        target: { x: 20, y: 4, z: 16 },
+        radius: 52,
+        theta: Math.PI * 0.25,
+        phi: Math.PI * 0.34,
+        isPointerDown: false,
+        pointerButton: 0,
+        lastX: 0,
+        lastY: 0,
+        dragMoved: false,
+      };
+
+      function init3DView() {
+        if (threeCtx.initialized || typeof THREE === 'undefined') return;
+        threeCtx.initialized = true;
+
+        const rect = canvasContainer.getBoundingClientRect();
+        const w = Math.max(1, rect.width);
+        const h = Math.max(1, rect.height);
+
+        threeCtx.scene = new THREE.Scene();
+        threeCtx.scene.background = new THREE.Color(0x070c18);
+        threeCtx.scene.fog = new THREE.FogExp2(0x070c18, 0.0045);
+
+        threeCtx.camera = new THREE.PerspectiveCamera(45, w / h, 0.2, 600);
+        threeCtx.renderer = new THREE.WebGLRenderer({ antialias: true });
+        threeCtx.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        threeCtx.renderer.setSize(w, h);
+        view3DContainer.innerHTML = '';
+        view3DContainer.appendChild(threeCtx.renderer.domElement);
+
+        // Lighting
+        const hemi = new THREE.HemisphereLight(0xdbeafe, 0x1e293b, 0.85);
+        threeCtx.scene.add(hemi);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+        dirLight.position.set(40, 70, 50);
+        threeCtx.scene.add(dirLight);
+
+        const fillLight = new THREE.DirectionalLight(0x38bdf8, 0.35);
+        fillLight.position.set(-40, 30, -30);
+        threeCtx.scene.add(fillLight);
+
+        // Ground Grid (100ft x 100ft, 1ft divisions)
+        const grid = new THREE.GridHelper(120, 120, 0x1e3a8a, 0x0f1f3d);
+        grid.position.set(20, 0, 15);
+        threeCtx.scene.add(grid);
+
+        threeCtx.rootGroup = new THREE.Group();
+        threeCtx.scene.add(threeCtx.rootGroup);
+        threeCtx.raycaster = new THREE.Raycaster();
+
+        setup3DInteractions(threeCtx.renderer.domElement);
+        update3DCamera();
+        animate3D();
+      }
+
+      function update3DCamera() {
+        if (!threeCtx.camera) return;
+        const sinPhi = Math.sin(threeCtx.phi);
+        const cx = threeCtx.target.x + threeCtx.radius * sinPhi * Math.sin(threeCtx.theta);
+        const cy = threeCtx.target.y + threeCtx.radius * Math.cos(threeCtx.phi);
+        const cz = threeCtx.target.z + threeCtx.radius * sinPhi * Math.cos(threeCtx.theta);
+        threeCtx.camera.position.set(cx, Math.max(0.5, cy), cz);
+        threeCtx.camera.lookAt(threeCtx.target.x, threeCtx.target.y, threeCtx.target.z);
+      }
+
+      function set3DCameraPreset(preset) {
+        // Center target on floorplan bounding box
+        let cx = 20, cz = 15;
+        if (state.rooms.length > 0) {
+          const centers = state.rooms.map(getRoomCenter);
+          cx = centers.reduce((s, p) => s + p.x, 0) / centers.length;
+          cz = centers.reduce((s, p) => s + p.y, 0) / centers.length;
+        }
+        threeCtx.target = { x: cx, y: 4.5, z: cz };
+
+        if (preset === 'iso') {
+          threeCtx.radius = 52;
+          threeCtx.theta = Math.PI * 0.25;
+          threeCtx.phi = Math.PI * 0.34;
+        } else if (preset === 'top') {
+          threeCtx.radius = 58;
+          threeCtx.theta = 0;
+          threeCtx.phi = 0.04;
+        } else if (preset === 'front') {
+          threeCtx.radius = 50;
+          threeCtx.theta = 0;
+          threeCtx.phi = Math.PI * 0.46;
+        } else if (preset === 'side') {
+          threeCtx.radius = 50;
+          threeCtx.theta = Math.PI * 0.5;
+          threeCtx.phi = Math.PI * 0.46;
+        }
+        update3DCamera();
+      }
+
+      function setup3DInteractions(dom) {
+        dom.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        dom.addEventListener('pointerdown', (e) => {
+          dom.setPointerCapture(e.pointerId);
+          threeCtx.isPointerDown = true;
+          threeCtx.pointerButton = e.button;
+          threeCtx.lastX = e.clientX;
+          threeCtx.lastY = e.clientY;
+          threeCtx.dragMoved = false;
+        });
+
+        dom.addEventListener('pointermove', (e) => {
+          if (!threeCtx.isPointerDown) return;
+          const dx = e.clientX - threeCtx.lastX;
+          const dy = e.clientY - threeCtx.lastY;
+          if (Math.hypot(dx, dy) > 3) threeCtx.dragMoved = true;
+          threeCtx.lastX = e.clientX;
+          threeCtx.lastY = e.clientY;
+
+          if (threeCtx.pointerButton === 2 || e.shiftKey) {
+            // Pan camera target parallel to ground plane
+            const panSpeed = threeCtx.radius * 0.0018;
+            const cosT = Math.cos(threeCtx.theta);
+            const sinT = Math.sin(threeCtx.theta);
+            threeCtx.target.x -= (dx * cosT + dy * sinT) * panSpeed;
+            threeCtx.target.z -= (-dx * sinT + dy * cosT) * panSpeed;
+          } else {
+            // Orbit camera
+            threeCtx.theta -= dx * 0.007;
+            threeCtx.phi = Math.max(0.05, Math.min(Math.PI * 0.49, threeCtx.phi - dy * 0.007));
+          }
+          update3DCamera();
+        });
+
+        dom.addEventListener('pointerup', (e) => {
+          const wasClick = !threeCtx.dragMoved && threeCtx.pointerButton === 0;
+          threeCtx.isPointerDown = false;
+          if (wasClick) {
+            pick3DObject(e);
+          }
+        });
+
+        dom.addEventListener('wheel', (e) => {
+          e.preventDefault();
+          const factor = e.deltaY < 0 ? 0.9 : 1.12;
+          threeCtx.radius = Math.max(8, Math.min(180, threeCtx.radius * factor));
+          update3DCamera();
+        }, { passive: false });
+      }
+
+      function pick3DObject(e) {
+        if (!threeCtx.raycaster || !threeCtx.camera) return;
+        const rect = threeCtx.renderer.domElement.getBoundingClientRect();
+        const mouse = new THREE.Vector2(
+          ((e.clientX - rect.left) / rect.width) * 2 - 1,
+          -((e.clientY - rect.top) / rect.height) * 2 + 1
+        );
+        threeCtx.raycaster.setFromCamera(mouse, threeCtx.camera);
+        const hits = threeCtx.raycaster.intersectObjects(threeCtx.pickables, false);
+        if (hits.length > 0) {
+          const meta = hits[0].object.userData.pickMeta;
+          if (meta) {
+            state.selected = meta;
+            updateInspectorUI();
+            updateScheduleUI();
+            rebuild3DScene();
+          }
+        } else {
+          state.selected = null;
+          updateInspectorUI();
+          updateScheduleUI();
+          rebuild3DScene();
+        }
+      }
+
+      function clear3DGroup(group) {
+        while (group.children.length > 0) {
+          const obj = group.children[0];
+          group.remove(obj);
+          if (obj.geometry) obj.geometry.dispose();
+          if (obj.material) {
+            if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose());
+            else obj.material.dispose();
+          }
+        }
+      }
+
+      /** Helper: build a 3D cylinder segment between two THREE.Vector3 points */
+      function addCylinderSegment3D(group, p1, p2, radius, colorHex, pickMeta, isSelected) {
+        const dir = new THREE.Vector3().subVectors(p2, p1);
+        const len = dir.length();
+        if (len < 0.01) return;
+
+        const geo = new THREE.CylinderGeometry(radius, radius, len, 16);
+        const mat = new THREE.MeshStandardMaterial({
+          color: isSelected ? 0xfbbf24 : colorHex,
+          roughness: 0.35,
+          metalness: 0.45,
+          emissive: isSelected ? 0x78350f : 0x000000,
+          emissiveIntensity: 0.4,
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.copy(p1).add(p2).multiplyScalar(0.5);
+        mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+        mesh.userData.pickMeta = pickMeta;
+        group.add(mesh);
+        threeCtx.pickables.push(mesh);
+      }
+
+      /** Helper: build a 3D rectangular duct segment between two THREE.Vector3 points */
+      function addRectSegment3D(group, p1, p2, widthFt, heightFt, colorHex, pickMeta, isSelected) {
+        const dir = new THREE.Vector3().subVectors(p2, p1);
+        const len = dir.length();
+        if (len < 0.01) return;
+
+        const geo = new THREE.BoxGeometry(widthFt, heightFt, len);
+        const mat = new THREE.MeshStandardMaterial({
+          color: isSelected ? 0xfbbf24 : colorHex,
+          roughness: 0.4,
+          metalness: 0.5,
+          emissive: isSelected ? 0x78350f : 0x000000,
+          emissiveIntensity: 0.35,
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.copy(p1).add(p2).multiplyScalar(0.5);
+        mesh.lookAt(p2);
+        mesh.userData.pickMeta = pickMeta;
+        group.add(mesh);
+        threeCtx.pickables.push(mesh);
+      }
+
+      function rebuild3DScene() {
+        if (!threeCtx.initialized || !threeCtx.rootGroup) return;
+        clear3DGroup(threeCtx.rootGroup);
+        threeCtx.pickables = [];
+
+        const grp = threeCtx.rootGroup;
+
+        // 1. Rooms (Floor + Translucent/Wireframe Extruded Walls)
+        for (const room of state.rooms) {
+          const isSel = state.selected && state.selected.kind === 'room' && state.selected.id === room.id;
+          const h = Math.max(4, room.height || 10);
+          const pickMeta = { kind: 'room', id: room.id };
+
+          const wallOpacity = state.show3DWalls === 'solid' ? 0.45 : state.show3DWalls === 'xray' ? 0.14 : 0.0;
+          const wallMat = new THREE.MeshStandardMaterial({
+            color: isSel ? 0xfbbf24 : 0x38bdf8,
+            transparent: true,
+            opacity: wallOpacity,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+          });
+          const edgeMat = new THREE.LineBasicMaterial({
+            color: isSel ? 0xfbbf24 : 0x38bdf8,
+            transparent: true,
+            opacity: isSel ? 0.95 : 0.5,
+          });
+          const floorMat = new THREE.MeshStandardMaterial({
+            color: isSel ? 0x1e3a8a : 0x0f172a,
+            roughness: 0.9,
+            transparent: true,
+            opacity: 0.75,
+          });
+
+          if (room.shape === 'rect') {
+            // Floor
+            const fGeo = new THREE.PlaneGeometry(room.w, room.h);
+            const fMesh = new THREE.Mesh(fGeo, floorMat);
+            fMesh.rotation.x = -Math.PI / 2;
+            fMesh.position.set(room.x + room.w / 2, 0.03, room.y + room.h / 2);
+            fMesh.userData.pickMeta = pickMeta;
+            grp.add(fMesh);
+            threeCtx.pickables.push(fMesh);
+
+            // Walls box
+            const bGeo = new THREE.BoxGeometry(room.w, h, room.h);
+            if (wallOpacity > 0) {
+              const bMesh = new THREE.Mesh(bGeo, wallMat);
+              bMesh.position.set(room.x + room.w / 2, h / 2, room.y + room.h / 2);
+              grp.add(bMesh);
+            }
+            const edges = new THREE.LineSegments(new THREE.EdgesGeometry(bGeo), edgeMat);
+            edges.position.set(room.x + room.w / 2, h / 2, room.y + room.h / 2);
+            grp.add(edges);
+            if (wallOpacity === 0) bGeo.dispose();
+          } else if (room.shape === 'circle') {
+            const cGeo = new THREE.CylinderGeometry(room.r, room.r, h, 32, 1, true);
+            if (wallOpacity > 0) {
+              const cMesh = new THREE.Mesh(cGeo, wallMat);
+              cMesh.position.set(room.cx, h / 2, room.cy);
+              grp.add(cMesh);
+            }
+            const edges = new THREE.LineSegments(new THREE.EdgesGeometry(cGeo), edgeMat);
+            edges.position.set(room.cx, h / 2, room.cy);
+            grp.add(edges);
+            if (wallOpacity === 0) cGeo.dispose();
+
+            const fGeo = new THREE.CircleGeometry(room.r, 32);
+            const fMesh = new THREE.Mesh(fGeo, floorMat);
+            fMesh.rotation.x = -Math.PI / 2;
+            fMesh.position.set(room.cx, 0.03, room.cy);
+            fMesh.userData.pickMeta = pickMeta;
+            grp.add(fMesh);
+            threeCtx.pickables.push(fMesh);
+          } else if (room.shape === 'poly' && room.points.length >= 3) {
+            const shape = new THREE.Shape();
+            shape.moveTo(room.points[0].x, -room.points[0].y);
+            for (let i = 1; i < room.points.length; i++) {
+              shape.lineTo(room.points[i].x, -room.points[i].y);
+            }
+            shape.closePath();
+
+            const extGeo = new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: false });
+            extGeo.rotateX(-Math.PI / 2);
+            if (wallOpacity > 0) {
+              const eMesh = new THREE.Mesh(extGeo, wallMat);
+              grp.add(eMesh);
+            }
+            const edges = new THREE.LineSegments(new THREE.EdgesGeometry(extGeo), edgeMat);
+            grp.add(edges);
+            if (wallOpacity === 0) extGeo.dispose();
+
+            const fGeo = new THREE.ShapeGeometry(shape);
+            fGeo.rotateX(-Math.PI / 2);
+            const fMesh = new THREE.Mesh(fGeo, floorMat);
+            fMesh.position.y = 0.03;
+            fMesh.userData.pickMeta = pickMeta;
+            grp.add(fMesh);
+            threeCtx.pickables.push(fMesh);
+          }
+        }
+
+        // 2. AHU Mechanical Unit
+        if (state.ahu && state.show3DHvac) {
+          const isSel = state.selected && state.selected.kind === 'ahu';
+          const ahuH = 6.5;
+          const geo = new THREE.BoxGeometry(state.ahu.w, ahuH, state.ahu.h);
+          const mat = new THREE.MeshStandardMaterial({
+            color: isSel ? 0xfbbf24 : 0x6366f1,
+            roughness: 0.4,
+            metalness: 0.6,
+          });
+          const mesh = new THREE.Mesh(geo, mat);
+          mesh.position.set(state.ahu.x + state.ahu.w / 2, ahuH / 2, state.ahu.y + state.ahu.h / 2);
+          mesh.userData.pickMeta = { kind: 'ahu' };
+          grp.add(mesh);
+          threeCtx.pickables.push(mesh);
+
+          const edges = new THREE.LineSegments(
+            new THREE.EdgesGeometry(geo),
+            new THREE.LineBasicMaterial({ color: 0xc7d2fe })
+          );
+          edges.position.copy(mesh.position);
+          grp.add(edges);
+        }
+
+        // 3. HVAC Ductwork (Round Cylinders & Rectangular Boxes at exact Z elevation)
+        if (state.show3DHvac) {
+          for (const duct of state.ducts) {
+            const res = state.computed.ductResults[duct.id];
+            if (!res || duct.points.length < 2) continue;
+            const isSel = state.selected && state.selected.kind === 'duct' && state.selected.id === duct.id;
+            const isFail = res.status === 'FAIL';
+            const colorHex = isFail ? 0xef4444 : DUCT_COLORS[duct.type].hex3d;
+            const z = Number(duct.elevation ?? DUCT_COLORS[duct.type].defaultZ);
+            const pickMeta = { kind: 'duct', id: duct.id };
+
+            const wFt = Math.max(0.35, res.widthIn / 12);
+            const hFt = Math.max(0.35, res.heightIn / 12);
+            const rad = wFt / 2;
+
+            for (let i = 0; i < duct.points.length - 1; i++) {
+              const p1 = new THREE.Vector3(duct.points[i].x, z, duct.points[i].y);
+              const p2 = new THREE.Vector3(duct.points[i + 1].x, z, duct.points[i + 1].y);
+
+              if (res.effectiveShape === 'rect') {
+                addRectSegment3D(grp, p1, p2, wFt, hFt, colorHex, pickMeta, isSel);
+              } else {
+                addCylinderSegment3D(grp, p1, p2, rad, colorHex, pickMeta, isSel);
+              }
+            }
+
+            // Elbow / Junction fittings at vertices
+            duct.points.forEach((pt) => {
+              const jointGeo = res.effectiveShape === 'rect'
+                ? new THREE.BoxGeometry(wFt * 1.04, hFt * 1.04, wFt * 1.04)
+                : new THREE.SphereGeometry(rad * 1.03, 14, 14);
+              const jointMat = new THREE.MeshStandardMaterial({
+                color: isSelectedColor(isSel, colorHex),
+                roughness: 0.35,
+                metalness: 0.5,
+              });
+              const jm = new THREE.Mesh(jointGeo, jointMat);
+              jm.position.set(pt.x, z, pt.y);
+              jm.userData.pickMeta = pickMeta;
+              grp.add(jm);
+              threeCtx.pickables.push(jm);
+            });
+          }
+        }
+
+        // 4. Plumbing Pipes (3D sloped / elevated cylinders + elbows)
+        if (state.show3DPlumbing) {
+          for (const pipe of state.pipes) {
+            const res = state.computed.pipeResults[pipe.id];
+            if (!res || res.points3d.length < 2) continue;
+            const isSel = state.selected && state.selected.kind === 'pipe' && state.selected.id === pipe.id;
+            const colorHex = PIPE_COLORS[pipe.type].hex3d;
+            const pickMeta = { kind: 'pipe', id: pipe.id };
+            // Slight minimum visual radius so 1/2" & 3/4" lines stay crisp in 3D
+            const rad = Math.max(0.08, (pipe.diameterIn / 12) / 2);
+
+            for (let i = 0; i < res.points3d.length - 1; i++) {
+              const a = res.points3d[i];
+              const b = res.points3d[i + 1];
+              addCylinderSegment3D(
+                grp,
+                new THREE.Vector3(a.x, a.z, a.y),
+                new THREE.Vector3(b.x, b.z, b.y),
+                rad,
+                colorHex,
+                pickMeta,
+                isSel
+              );
+            }
+
+            // Pipe elbow fittings
+            res.points3d.forEach((pt) => {
+              const jGeo = new THREE.SphereGeometry(rad * 1.2, 12, 12);
+              const jMat = new THREE.MeshStandardMaterial({
+                color: isSelectedColor(isSel, colorHex),
+                roughness: 0.3,
+                metalness: 0.6,
+              });
+              const jm = new THREE.Mesh(jGeo, jMat);
+              jm.position.set(pt.x, pt.z, pt.y);
+              jm.userData.pickMeta = pickMeta;
+              grp.add(jm);
+              threeCtx.pickables.push(jm);
+            });
+          }
+        }
+
+        // 5. 3D Clash Warning Spheres
+        for (const cl of state.computed.clashes) {
+          const cGeo = new THREE.SphereGeometry(0.45, 16, 16);
+          const cMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b, wireframe: true });
+          const cm = new THREE.Mesh(cGeo, cMat);
+          cm.position.set(cl.x, cl.z, cl.y);
+          grp.add(cm);
+        }
+      }
+
+      function isSelectedColor(isSel, fallbackHex) {
+        return isSel ? 0xfbbf24 : fallbackHex;
+      }
+
+      function animate3D() {
+        requestAnimationFrame(animate3D);
+        if (state.viewMode === '3d' && threeCtx.renderer && threeCtx.scene && threeCtx.camera) {
+          threeCtx.renderer.render(threeCtx.scene, threeCtx.camera);
+        }
+      }
+
+      function setViewMode(mode) {
+        state.viewMode = mode;
+        if (mode === '3d') {
+          cancelDraft();
+          canvas.classList.add('hidden');
+          view3DContainer.classList.remove('hidden');
+          hud2DLeft.classList.add('hidden');
+          hud2DRight.classList.add('hidden');
+          hud3DControls.classList.remove('hidden');
+
+          btnView3D.className = 'px-3 py-1 rounded-md text-xs font-semibold transition bg-indigo-600 text-white shadow flex items-center gap-1.5';
+          btnView2D.className = 'px-3 py-1 rounded-md text-xs font-semibold transition text-slate-300 hover:text-white flex items-center gap-1.5';
+          toolHintText.textContent = '3D MEP View: Left-drag to Orbit • Right-drag/Shift-drag to Pan • Scroll to Zoom • Click any duct, pipe, or room to edit Elevation (Z).';
+
+          init3DView();
+          resizeCanvas();
+          rebuild3DScene();
+          set3DCameraPreset('iso');
+        } else {
+          view3DContainer.classList.add('hidden');
+          canvas.classList.remove('hidden');
+          hud2DLeft.classList.remove('hidden');
+          hud2DRight.classList.remove('hidden');
+          hud3DControls.classList.add('hidden');
+
+          btnView2D.className = 'px-3 py-1 rounded-md text-xs font-semibold transition bg-indigo-600 text-white shadow flex items-center gap-1.5';
+          btnView3D.className = 'px-3 py-1 rounded-md text-xs font-semibold transition text-slate-300 hover:text-white flex items-center gap-1.5';
+          toolHintText.textContent = TOOL_HINTS[state.tool] || '';
+
+          resizeCanvas();
+          render();
+        }
+      }
+
+      // =========================================================================
+      // 8. 2D SNAPPING & HIT TESTING
+      // =========================================================================
+      function getConstrainedPoint(rawWorld, anchorPt, allowMepSnap) {
+        let pt = { x: snapVal(rawWorld.x), y: snapVal(rawWorld.y) };
+        let snapInfo = null;
+
+        // 90-degree Ortho snapping
+        if (anchorPt && state.orthoSnap) {
+          const dx = Math.abs(rawWorld.x - anchorPt.x);
+          const dy = Math.abs(rawWorld.y - anchorPt.y);
+          if (dx >= dy) {
+            pt = { x: snapVal(rawWorld.x), y: anchorPt.y };
+          } else {
+            pt = { x: anchorPt.x, y: snapVal(rawWorld.y) };
+          }
+        }
+
+        // Smart snap to AHU, existing ducts/pipes of same type (tees), or room centers
+        if (allowMepSnap) {
+          const isDuct = state.tool.startsWith('duct_');
+          const isPipe = state.tool.startsWith('pipe_');
+
+          if (isDuct && state.ahu) {
+            const c = { x: state.ahu.x + state.ahu.w / 2, y: state.ahu.y + state.ahu.h / 2 };
+            if (dist(rawWorld, c) < Math.max(state.ahu.w, state.ahu.h) * 0.7) {
+              pt = c;
+              snapInfo = { x: c.x, y: c.y, label: 'SNAP: AHU' };
+            }
+          }
+          if (!snapInfo && isDuct) {
+            const dType = state.tool.replace('duct_', '');
+            for (const d of state.ducts) {
+              if (d.type !== dType) continue;
+              const res = pointToPolyline(rawWorld, d.points);
+              if (res.dist < 0.85) {
+                pt = { x: Math.round(res.point.x * 2) / 2, y: Math.round(res.point.y * 2) / 2 };
+                snapInfo = { x: pt.x, y: pt.y, label: 'SNAP: TEE' };
+                break;
+              }
+            }
+          }
+          if (!snapInfo && isPipe) {
+            const pType = state.tool.replace('pipe_', '');
+            for (const p of state.pipes) {
+              if (p.type !== pType) continue;
+              const res = pointToPolyline(rawWorld, p.points);
+              if (res.dist < 0.85) {
+                pt = { x: Math.round(res.point.x * 2) / 2, y: Math.round(res.point.y * 2) / 2 };
+                snapInfo = { x: pt.x, y: pt.y, label: 'SNAP: PIPE TEE' };
+                break;
+              }
+            }
+          }
+          if (!snapInfo) {
+            for (const room of state.rooms) {
+              const rc = getRoomCenter(room);
+              if (dist(rawWorld, rc) < 1.1) {
+                pt = { x: Math.round(rc.x * 2) / 2, y: Math.round(rc.y * 2) / 2 };
+                snapInfo = { x: pt.x, y: pt.y, label: `SNAP: ${room.name}` };
+                break;
+              }
+            }
+          }
+        }
+
+        state.hoverSnap = snapInfo;
+        return pt;
+      }
+
+      function hitTest(worldPt) {
+        const tol = 10 / state.zoom;
+
+        // 1. Selected item handles
+        if (state.selected) {
+          if (state.selected.kind === 'room') {
+            const room = state.rooms.find((r) => r.id === state.selected.id);
+            if (room) {
+              if (room.shape === 'rect') {
+                const corners = [
+                  { idx: 0, x: room.x, y: room.y },
+                  { idx: 1, x: room.x + room.w, y: room.y },
+                  { idx: 2, x: room.x + room.w, y: room.y + room.h },
+                  { idx: 3, x: room.x, y: room.y + room.h },
+                ];
+                for (const c of corners) {
+                  if (dist(worldPt, c) <= tol) return { kind: 'handle_rect', room, cornerIdx: c.idx };
+                }
+              } else if (room.shape === 'circle') {
+                if (dist(worldPt, { x: room.cx + room.r, y: room.cy }) <= tol) {
+                  return { kind: 'handle_circle', room };
+                }
+              } else if (room.shape === 'poly') {
+                for (let i = 0; i < room.points.length; i++) {
+                  if (dist(worldPt, room.points[i]) <= tol) {
+                    return { kind: 'handle_poly', room, vtxIdx: i };
+                  }
+                }
+              }
+            }
+          } else if (state.selected.kind === 'duct') {
+            const duct = state.ducts.find((d) => d.id === state.selected.id);
+            if (duct) {
+              for (let i = 0; i < duct.points.length; i++) {
+                if (dist(worldPt, duct.points[i]) <= tol) {
+                  return { kind: 'handle_duct', duct, vtxIdx: i };
+                }
+              }
+            }
+          } else if (state.selected.kind === 'pipe') {
+            const pipe = state.pipes.find((p) => p.id === state.selected.id);
+            if (pipe) {
+              for (let i = 0; i < pipe.points.length; i++) {
+                if (dist(worldPt, pipe.points[i]) <= tol) {
+                  return { kind: 'handle_pipe', pipe, vtxIdx: i };
+                }
+              }
+            }
+          }
+        }
+
+        // 2. AHU
+        if (state.ahu) {
+          if (worldPt.x >= state.ahu.x && worldPt.x <= state.ahu.x + state.ahu.w &&
+              worldPt.y >= state.ahu.y && worldPt.y <= state.ahu.y + state.ahu.h) {
+            return { kind: 'ahu' };
+          }
+        }
+
+        // 3. Ducts
+        for (let i = state.ducts.length - 1; i >= 0; i--) {
+          const d = state.ducts[i];
+          if (pointToPolyline(worldPt, d.points).dist <= Math.max(0.55, tol * 0.85)) {
+            return { kind: 'duct', id: d.id };
+          }
+        }
+
+        // 4. Plumbing Pipes
+        for (let i = state.pipes.length - 1; i >= 0; i--) {
+          const p = state.pipes[i];
+          if (pointToPolyline(worldPt, p.points).dist <= Math.max(0.55, tol * 0.85)) {
+            return { kind: 'pipe', id: p.id };
+          }
+        }
+
+        // 5. Rooms
+        for (let i = state.rooms.length - 1; i >= 0; i--) {
+          if (isPointInRoom(worldPt, state.rooms[i])) {
+            return { kind: 'room', id: state.rooms[i].id };
+          }
+        }
+
+        return null;
+      }
+
+      // =========================================================================
+      // 9. 2D POINTER INTERACTIONS
+      // =========================================================================
+      function getEventScreenPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      }
+
+      function finishDraft() {
+        if (state.tool === 'poly' && state.draftPoints.length >= 3) {
+          const newRoom = {
+            id: genId('room'),
+            name: `Room ${state.rooms.length + 1}`,
+            shape: 'poly',
+            points: state.draftPoints.map((p) => ({ ...p })),
+            height: 10,
+            ach: 6,
+          };
+          state.rooms.push(newRoom);
+          state.selected = { kind: 'room', id: newRoom.id };
+          showToast(`Created ${newRoom.name}`);
+        } else if (state.tool.startsWith('duct_') && state.draftPoints.length >= 2) {
+          const type = state.tool.replace('duct_', '');
+          const prefix = type === 'exhaust' ? 'EX' : 'RT';
+          const count = state.ducts.filter((d) => d.type === type).length + 1;
+          const newDuct = {
+            id: genId('duct'),
+            name: `${prefix}-${count}`,
+            type,
+            elevation: DUCT_COLORS[type].defaultZ,
+            points: state.draftPoints.map((p) => ({ ...p })),
+            manualCfm: null,
+            manualSize: null,
+            shapeOverride: 'global',
+            rectHeight: 'global',
+          };
+          state.ducts.push(newDuct);
+          state.selected = { kind: 'duct', id: newDuct.id };
+          showToast(`Added ${DUCT_COLORS[type].label} Duct ${newDuct.name}`);
+        } else if (state.tool.startsWith('pipe_') && state.draftPoints.length >= 2) {
+          const type = state.tool.replace('pipe_', '');
+          const ci = PIPE_COLORS[type];
+          const count = state.pipes.filter((p) => p.type === type).length + 1;
+          const newPipe = {
+            id: genId('pipe'),
+            name: `${ci.prefix}-${count}`,
+            type,
+            diameterIn: ci.defaultDia,
+            elevation: ci.defaultZ,
+            endElevation: null,
+            slopeInPerFt: ci.defaultSlope,
+            points: state.draftPoints.map((p) => ({ ...p })),
+          };
+          state.pipes.push(newPipe);
+          state.selected = { kind: 'pipe', id: newPipe.id };
+          showToast(`Added ${ci.label} Pipe ${newPipe.name}`);
+        }
+        state.draftPoints = [];
+        drawingActions.classList.add('hidden');
+        recalculateSystem();
+      }
+
+      function cancelDraft() {
+        state.draftPoints = [];
+        state.draftRect = null;
+        state.draftCircle = null;
+        state.hoverSnap = null;
+        drawingActions.classList.add('hidden');
+        render();
+      }
+
+      canvas.addEventListener('pointerdown', (e) => {
+        canvas.setPointerCapture(e.pointerId);
+        const sp = getEventScreenPos(e);
+        const wp = screenToWorld(sp.x, sp.y);
+        state.mouseWorld = wp;
+        state.dragStartScreen = sp;
+        state.dragStartWorld = wp;
+
+        if (e.button === 1 || state.tool === 'pan') {
+          state.isDragging = true;
+          state.dragMode = 'pan';
+          state.dragTargetMeta = { panX: state.panX, panY: state.panY };
+          return;
+        }
+        if (e.button !== 0) return;
+
+        if (state.tool === 'select') {
+          const hit = hitTest(wp);
+          if (!hit) {
+            state.selected = null;
+            updateInspectorUI();
+            render();
+            return;
+          }
+
+          state.isDragging = true;
+          if (hit.kind === 'handle_rect') {
+            state.dragMode = 'resize_rect';
+            state.dragTargetMeta = { room: hit.room, cornerIdx: hit.cornerIdx };
+          } else if (hit.kind === 'handle_circle') {
+            state.dragMode = 'resize_circle';
+            state.dragTargetMeta = { room: hit.room };
+          } else if (hit.kind === 'handle_poly') {
+            state.dragMode = 'move_poly_vtx';
+            state.dragTargetMeta = { room: hit.room, vtxIdx: hit.vtxIdx };
+          } else if (hit.kind === 'handle_duct') {
+            state.dragMode = 'move_duct_vtx';
+            state.dragTargetMeta = { duct: hit.duct, vtxIdx: hit.vtxIdx };
+          } else if (hit.kind === 'handle_pipe') {
+            state.dragMode = 'move_pipe_vtx';
+            state.dragTargetMeta = { pipe: hit.pipe, vtxIdx: hit.vtxIdx };
+          } else if (hit.kind === 'ahu') {
+            state.selected = { kind: 'ahu' };
+            state.dragMode = 'move_ahu';
+            state.dragTargetMeta = { origX: state.ahu.x, origY: state.ahu.y };
+          } else if (hit.kind === 'duct') {
+            state.selected = { kind: 'duct', id: hit.id };
+            state.dragMode = null;
+          } else if (hit.kind === 'pipe') {
+            state.selected = { kind: 'pipe', id: hit.id };
+            state.dragMode = null;
+          } else if (hit.kind === 'room') {
+            state.selected = { kind: 'room', id: hit.id };
+            const room = state.rooms.find((r) => r.id === hit.id);
+            state.dragMode = 'move_room';
+            state.dragTargetMeta = {
+              room,
+              orig: room.shape === 'rect'
+                ? { x: room.x, y: room.y }
+                : room.shape === 'circle'
+                  ? { cx: room.cx, cy: room.cy }
+                  : { points: room.points.map((p) => ({ ...p })) },
+            };
+          }
+          updateInspectorUI();
+          updateScheduleUI();
+          render();
+          return;
+        }
+
+        if (state.tool === 'rect') {
+          const p = { x: snapVal(wp.x), y: snapVal(wp.y) };
+          state.isDragging = true;
+          state.dragMode = 'draw_rect';
+          state.draftRect = { x1: p.x, y1: p.y, x2: p.x, y2: p.y };
+          render();
+          return;
+        }
+
+        if (state.tool === 'circle') {
+          const p = { x: snapVal(wp.x), y: snapVal(wp.y) };
+          state.isDragging = true;
+          state.dragMode = 'draw_circle';
+          state.draftCircle = { cx: p.x, cy: p.y, r: 1 };
+          render();
+          return;
+        }
+
+        if (state.tool === 'poly') {
+          const anchor = state.draftPoints.length > 0 ? state.draftPoints[state.draftPoints.length - 1] : null;
+          const pt = getConstrainedPoint(wp, anchor, false);
+          if (state.draftPoints.length >= 3 && dist(pt, state.draftPoints[0]) < 1.2) {
+            finishDraft();
+            return;
+          }
+          state.draftPoints.push(pt);
+          drawingActions.classList.remove('hidden');
+          render();
+          return;
+        }
+
+        if (state.tool === 'ahu') {
+          state.ahu = { x: snapVal(wp.x - 2), y: snapVal(wp.y - 1.5), w: 4, h: 3 };
+          state.selected = { kind: 'ahu' };
+          setTool('select');
+          showToast('Placed Air Handling Unit (AHU)');
+          recalculateSystem();
+          return;
+        }
+
+        if (state.tool.startsWith('duct_') || state.tool.startsWith('pipe_')) {
+          const anchor = state.draftPoints.length > 0 ? state.draftPoints[state.draftPoints.length - 1] : null;
+          const pt = getConstrainedPoint(wp, anchor, true);
+          if (anchor && dist(anchor, pt) < 0.15) return;
+          state.draftPoints.push(pt);
+          drawingActions.classList.remove('hidden');
+          render();
+        }
+      });
+
+      canvas.addEventListener('pointermove', (e) => {
+        const sp = getEventScreenPos(e);
+        const wp = screenToWorld(sp.x, sp.y);
+        state.mouseWorld = wp;
+        hudX.textContent = wp.x.toFixed(1);
+        hudY.textContent = wp.y.toFixed(1);
+
+        if (!state.isDragging) {
+          if (state.tool.startsWith('duct_') || state.tool.startsWith('pipe_')) {
+            const anchor = state.draftPoints.length > 0 ? state.draftPoints[state.draftPoints.length - 1] : null;
+            getConstrainedPoint(wp, anchor, true);
+            render();
+          } else if (state.tool === 'poly' && state.draftPoints.length > 0) {
+            render();
+          }
+          return;
+        }
+
+        const dx = wp.x - state.dragStartWorld.x;
+        const dy = wp.y - state.dragStartWorld.y;
+
+        if (state.dragMode === 'pan') {
+          state.panX = state.dragTargetMeta.panX + (sp.x - state.dragStartScreen.x);
+          state.panY = state.dragTargetMeta.panY + (sp.y - state.dragStartScreen.y);
+          render();
+        } else if (state.dragMode === 'draw_rect') {
+          state.draftRect.x2 = snapVal(wp.x);
+          state.draftRect.y2 = snapVal(wp.y);
+          render();
+        } else if (state.dragMode === 'draw_circle') {
+          state.draftCircle.r = Math.max(1, snapVal(dist({ x: state.draftCircle.cx, y: state.draftCircle.cy }, wp)));
+          render();
+        } else if (state.dragMode === 'move_room') {
+          const { room, orig } = state.dragTargetMeta;
+          const sdx = snapVal(dx);
+          const sdy = snapVal(dy);
+          if (room.shape === 'rect') {
+            room.x = orig.x + sdx; room.y = orig.y + sdy;
+          } else if (room.shape === 'circle') {
+            room.cx = orig.cx + sdx; room.cy = orig.cy + sdy;
+          } else if (room.shape === 'poly') {
+            room.points = orig.points.map((p) => ({ x: p.x + sdx, y: p.y + sdy }));
+          }
+          recalculateSystem();
+        } else if (state.dragMode === 'resize_rect') {
+          const { room, cornerIdx } = state.dragTargetMeta;
+          const sx = snapVal(wp.x), sy = snapVal(wp.y);
+          const right = room.x + room.w, bottom = room.y + room.h;
+          if (cornerIdx === 0) {
+            if (right - sx >= 2) { room.w = right - sx; room.x = sx; }
+            if (bottom - sy >= 2) { room.h = bottom - sy; room.y = sy; }
+          } else if (cornerIdx === 1) {
+            if (sx - room.x >= 2) room.w = sx - room.x;
+            if (bottom - sy >= 2) { room.h = bottom - sy; room.y = sy; }
+          } else if (cornerIdx === 2) {
+            if (sx - room.x >= 2) room.w = sx - room.x;
+            if (sy - room.y >= 2) room.h = sy - room.y;
+          } else if (cornerIdx === 3) {
+            if (right - sx >= 2) { room.w = right - sx; room.x = sx; }
+            if (sy - room.y >= 2) room.h = sy - room.y;
+          }
+          recalculateSystem();
+        } else if (state.dragMode === 'resize_circle') {
+          const { room } = state.dragTargetMeta;
+          room.r = Math.max(2, snapVal(dist({ x: room.cx, y: room.cy }, wp)));
+          recalculateSystem();
+        } else if (state.dragMode === 'move_poly_vtx') {
+          const { room, vtxIdx } = state.dragTargetMeta;
+          room.points[vtxIdx] = { x: snapVal(wp.x), y: snapVal(wp.y) };
+          recalculateSystem();
+        } else if (state.dragMode === 'move_duct_vtx') {
+          const { duct, vtxIdx } = state.dragTargetMeta;
+          duct.points[vtxIdx] = { x: snapVal(wp.x), y: snapVal(wp.y) };
+          recalculateSystem();
+        } else if (state.dragMode === 'move_pipe_vtx') {
+          const { pipe, vtxIdx } = state.dragTargetMeta;
+          pipe.points[vtxIdx] = { x: snapVal(wp.x), y: snapVal(wp.y) };
+          recalculateSystem();
+        } else if (state.dragMode === 'move_ahu') {
+          state.ahu.x = snapVal(state.dragTargetMeta.origX + dx);
+          state.ahu.y = snapVal(state.dragTargetMeta.origY + dy);
+          recalculateSystem();
+        }
+      });
+
+      canvas.addEventListener('pointerup', () => {
+        if (!state.isDragging) return;
+        if (state.dragMode === 'draw_rect' && state.draftRect) {
+          const r = state.draftRect;
+          const x = Math.min(r.x1, r.x2), y = Math.min(r.y1, r.y2);
+          const w = Math.abs(r.x2 - r.x1), h = Math.abs(r.y2 - r.y1);
+          if (w >= 2 && h >= 2) {
+            const newRoom = { id: genId('room'), name: `Room ${state.rooms.length + 1}`, shape: 'rect', x, y, w, h, height: 10, ach: 6 };
+            state.rooms.push(newRoom);
+            state.selected = { kind: 'room', id: newRoom.id };
+            showToast(`Added ${newRoom.name} (${w}×${h} ft)`);
+          }
+          state.draftRect = null;
+          recalculateSystem();
+        } else if (state.dragMode === 'draw_circle' && state.draftCircle) {
+          const c = state.draftCircle;
+          if (c.r >= 2) {
+            const newRoom = { id: genId('room'), name: `Room ${state.rooms.length + 1}`, shape: 'circle', cx: c.cx, cy: c.cy, r: c.r, height: 10, ach: 6 };
+            state.rooms.push(newRoom);
+            state.selected = { kind: 'room', id: newRoom.id };
+            showToast(`Added ${newRoom.name} (Ø ${c.r * 2} ft)`);
+          }
+          state.draftCircle = null;
+          recalculateSystem();
+        }
+        state.isDragging = false;
+        state.dragMode = null;
+        state.dragTargetMeta = null;
+      });
+
+      canvas.addEventListener('dblclick', () => {
+        if (state.draftPoints.length >= 2) finishDraft();
+      });
+
+      canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const sp = getEventScreenPos(e);
+        const before = screenToWorld(sp.x, sp.y);
+        const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+        state.zoom = Math.max(5, Math.min(70, state.zoom * factor));
+        state.panX = sp.x - before.x * state.zoom;
+        state.panY = sp.y - before.y * state.zoom;
+        hudZoom.textContent = `${Math.round((state.zoom / 18) * 100)}%`;
+        render();
+      }, { passive: false });
+
+      // =========================================================================
+      // 10. UI SYNCHRONIZATION (SUMMARY, INSPECTOR, SCHEDULE)
+      // =========================================================================
+      function updateSummaryUI() {
+        const c = state.computed;
+        document.getElementById('sumExhaustCfm').textContent = `${Math.round(c.totalExhaustCfm)} CFM`;
+        document.getElementById('sumReturnPct').textContent = `${state.returnRatioPct}`;
+        document.getElementById('sumReturnCfm').textContent = `${Math.round(c.totalReturnCfm)} CFM`;
+        document.getElementById('sumFreshPct').textContent = `${100 - state.returnRatioPct}`;
+        document.getElementById('sumFreshCfm').textContent = `${Math.round(c.totalFreshCfm)} CFM`;
+        document.getElementById('sumPlumbingLen').textContent = `${c.totalPlumbingLen.toFixed(0)} ft`;
+
+        const velEl = document.getElementById('sumPeakVel');
+        velEl.textContent = `${Math.round(c.peakVelocity)} FPM`;
+        velEl.className = `font-mono font-semibold ${c.peakVelocity > state.maxVelocity + 0.5 ? 'text-rose-400' : 'text-emerald-400'}`;
+
+        const stEl = document.getElementById('sumMaxStatic');
+        stEl.textContent = `${c.maxPathStaticLoss.toFixed(3)} InWg`;
+        stEl.className = `font-mono font-semibold ${c.maxPathStaticLoss > state.maxStaticLoss + 0.0005 ? 'text-rose-400' : 'text-emerald-400'}`;
+
+        const clashBadge = document.getElementById('sumClashBadge');
+        if (c.clashes.length > 0) {
+          clashBadge.classList.remove('hidden');
+          clashBadge.textContent = `${c.clashes.length} 3D CLASH${c.clashes.length > 1 ? 'ES' : ''}`;
+        } else {
+          clashBadge.classList.add('hidden');
+        }
+
+        const badge = document.getElementById('sumStatusBadge');
+        if (c.hasFailure) {
+          badge.textContent = 'LIMIT EXCEEDED';
+          badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/50';
+        } else {
+          badge.textContent = 'SYSTEM OK';
+          badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
+        }
+      }
+
+      function updateInspectorUI() {
+        const sel = state.selected;
+        if (!sel) {
+          inspectorTitle.textContent = 'Inspector';
+          inspectorTypeBadge.textContent = 'NONE';
+          inspectorTypeBadge.className = 'text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400';
+          inspectorBody.innerHTML = `
+            <div class="text-slate-400 space-y-2.5 leading-relaxed">
+              <p class="text-slate-300 font-medium">Select any Room, Duct, Plumbing Pipe, or AHU (in 2D or 3D) to inspect &amp; edit.</p>
+              <div class="bg-slate-950/70 border border-slate-800 rounded-lg p-2.5 space-y-1.5 text-[11px]">
+                <div class="text-sky-400 font-semibold">2D + 3D MEP Workflow</div>
+                <p>1. Draw rooms &amp; route <span class="text-orange-300">Exhaust</span>, <span class="text-sky-300">Return</span>, and <span class="text-cyan-300">Plumbing</span> lines in <span class="text-white">2D Plan</span>.</p>
+                <p>2. Switch to <span class="text-indigo-300 font-semibold">3D MEP</span> to orbit and check vertical clearances &amp; drain slopes.</p>
+                <p>3. Click any duct or pipe to adjust its <span class="text-white">Elevation (Z ft)</span> and resolve 3D clashes.</p>
+              </div>
+              <div class="bg-slate-950/70 border border-slate-800 rounded-lg p-2.5 text-[11px] font-mono text-slate-400">
+                <div class="text-slate-300 font-sans font-semibold mb-1">Formulas</div>
+                <div>CFM = (Area × H × ACH) / 60</div>
+                <div>Return = ${state.returnRatioPct}% Exhaust</div>
+                <div>Fresh Air = ${100 - state.returnRatioPct}% Exhaust</div>
+                <div>De = 1.30·(a·b)⁰·⁶²⁵/(a+b)⁰·²⁵</div>
+              </div>
+            </div>
+          `;
+          return;
+        }
+
+        // ROOM INSPECTOR
+        if (sel.kind === 'room') {
+          const room = state.rooms.find((r) => r.id === sel.id);
+          if (!room) { state.selected = null; updateInspectorUI(); return; }
+          const res = state.computed.roomResults[room.id] || { area: 0, volume: 0, exhaustCfm: 0, returnCfm: 0 };
+
+          inspectorTitle.textContent = room.name;
+          inspectorTypeBadge.textContent = room.shape.toUpperCase();
+          inspectorTypeBadge.className = 'text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40';
+
+          let dimFields = '';
+          if (room.shape === 'rect') {
+            dimFields = `
+              <div class="grid grid-cols-2 gap-2">
+                <label class="block">
+                  <span class="text-[11px] text-slate-400">Width (ft)</span>
+                  <input id="propRoomW" type="number" min="2" step="0.5" value="${room.w}"
+                    class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 font-mono text-xs text-white focus:border-sky-400 focus:outline-none" />
+                </label>
+                <label class="block">
+                  <span class="text-[11px] text-slate-400">Length (ft)</span>
+                  <input id="propRoomH" type="number" min="2" step="0.5" value="${room.h}"
+                    class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 font-mono text-xs text-white focus:border-sky-400 focus:outline-none" />
+                </label>
+              </div>`;
+          } else if (room.shape === 'circle') {
+            dimFields = `
+              <label class="block">
+                <span class="text-[11px] text-slate-400">Radius (ft) — Ø ${(room.r * 2).toFixed(1)} ft</span>
+                <input id="propRoomR" type="number" min="2" step="0.5" value="${room.r}"
+                  class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 font-mono text-xs text-white focus:border-sky-400 focus:outline-none" />
+              </label>`;
+          } else {
+            dimFields = `<div class="text-[11px] text-slate-400 bg-slate-950/60 border border-slate-800 rounded-lg p-2">Drag yellow vertices in 2D to reshape polygon (${room.points.length} vertices).</div>`;
+          }
+
+          inspectorBody.innerHTML = `
+            <label class="block">
+              <span class="text-[11px] text-slate-400">Room Name</span>
+              <input id="propRoomName" type="text" value="${room.name}"
+                class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-sky-400 focus:outline-none" />
+            </label>
+            ${dimFields}
+            <div class="grid grid-cols-2 gap-2">
+              <label class="block">
+                <span class="text-[11px] text-slate-400">Ceiling Ht (ft)</span>
+                <input id="propRoomHeight" type="number" min="4" max="40" step="0.5" value="${room.height}"
+                  class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 font-mono text-xs text-white focus:border-sky-400 focus:outline-none" />
+              </label>
+              <label class="block">
+                <span class="text-[11px] text-slate-400">ACH (changes/hr)</span>
+                <input id="propRoomAch" type="number" min="0.5" max="60" step="0.5" value="${room.ach}"
+                  class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 font-mono text-xs text-sky-300 font-semibold focus:border-sky-400 focus:outline-none" />
+              </label>
+            </div>
+            <div class="bg-slate-950/80 border border-slate-800 rounded-lg p-2.5 space-y-1.5 font-mono text-[11px]">
+              <div class="flex justify-between"><span class="text-slate-400">Floor Area</span><span class="text-slate-200">${res.area.toFixed(1)} ft²</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Volume</span><span class="text-slate-200">${Math.round(res.volume)} ft³</span></div>
+              <div class="border-t border-slate-800 my-1"></div>
+              <div class="flex justify-between"><span class="text-orange-300">Exhaust CFM</span><span class="text-orange-300 font-bold">${res.exhaustCfm.toFixed(1)} CFM</span></div>
+              <div class="flex justify-between"><span class="text-sky-300">Return (${state.returnRatioPct}%)</span><span class="text-sky-300 font-bold">${res.returnCfm.toFixed(1)} CFM</span></div>
+            </div>
+            <button id="btnDelItem" class="mt-1 w-full py-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 text-xs font-medium transition">Delete Room</button>
+          `;
+
+          document.getElementById('propRoomName').oninput = (e) => { room.name = e.target.value; inspectorTitle.textContent = room.name; render(); updateScheduleUI(); };
+          if (room.shape === 'rect') {
+            document.getElementById('propRoomW').oninput = (e) => { const v = parseFloat(e.target.value); if (v >= 2) { room.w = v; recalculateSystem(); } };
+            document.getElementById('propRoomH').oninput = (e) => { const v = parseFloat(e.target.value); if (v >= 2) { room.h = v; recalculateSystem(); } };
+          } else if (room.shape === 'circle') {
+            document.getElementById('propRoomR').oninput = (e) => { const v = parseFloat(e.target.value); if (v >= 2) { room.r = v; recalculateSystem(); } };
+          }
+          document.getElementById('propRoomHeight').oninput = (e) => { const v = parseFloat(e.target.value); if (v > 0) { room.height = v; recalculateSystem(); } };
+          document.getElementById('propRoomAch').oninput = (e) => { const v = parseFloat(e.target.value); if (v >= 0) { room.ach = v; recalculateSystem(); } };
+          document.getElementById('btnDelItem').onclick = deleteSelected;
+          return;
+        }
+
+        // DUCT INSPECTOR
+        if (sel.kind === 'duct') {
+          const duct = state.ducts.find((d) => d.id === sel.id);
+          if (!duct) { state.selected = null; updateInspectorUI(); return; }
+          const res = state.computed.ductResults[duct.id] || {};
+          const ci = DUCT_COLORS[duct.type];
+          const curShapeOverride = duct.shapeOverride || 'global';
+          const effShape = curShapeOverride === 'global' ? state.ductShape : curShapeOverride;
+          const curRectHeight = duct.rectHeight || 'global';
+          const ductZ = duct.elevation ?? ci.defaultZ;
+
+          inspectorTitle.textContent = duct.name;
+          inspectorTypeBadge.textContent = ci.label.toUpperCase();
+          inspectorTypeBadge.className = `text-[10px] font-mono px-2 py-0.5 rounded border ${ci.badge}`;
+
+          const sizeOptions = effShape === 'round'
+            ? `<option value="">Auto (${res.sizeLabel || '—'})</option>` + STANDARD_ROUND_IN.map((d) => `<option value="${d}" ${String(duct.manualSize) === String(d) ? 'selected' : ''}>${d}" Ø</option>`).join('')
+            : `<option value="">Auto (${res.sizeLabel || '—'})</option>` + STANDARD_RECT_IN.map(([w, h]) => `<option value="${w}x${h}" ${duct.manualSize === `${w}x${h}` ? 'selected' : ''}>${w}" × ${h}"</option>`).join('');
+
+          const rectHeightBlock = effShape === 'rect' ? `
+            <label class="block">
+              <span class="text-[11px] text-slate-400">Rectangular Target Height</span>
+              <select id="propDuctRectHeight"
+                class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 font-mono text-xs text-sky-300 focus:border-sky-400 focus:outline-none">
+                <option value="global" ${curRectHeight === 'global' ? 'selected' : ''}>Global (${state.rectMaxHeight === 'auto' ? 'Auto' : state.rectMaxHeight + '"'})</option>
+                <option value="auto" ${curRectHeight === 'auto' ? 'selected' : ''}>Auto (Balanced)</option>
+                ${RECT_HEIGHT_OPTIONS.map((h) => `<option value="${h}" ${String(curRectHeight) === String(h) ? 'selected' : ''}>${h}" Height (2" W steps)</option>`).join('')}
+              </select>
+            </label>` : '';
+
+          const statusClass = res.status === 'FAIL'
+            ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+            : res.status === 'WARN'
+              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+              : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
+
+          inspectorBody.innerHTML = `
+            <div class="grid grid-cols-2 gap-2">
+              <label class="block">
+                <span class="text-[11px] text-slate-400">Duct Tag</span>
+                <input id="propDuctName" type="text" value="${duct.name}"
+                  class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:border-sky-400 focus:outline-none" />
+              </label>
+              <label class="block">
+                <span class="text-[11px] text-indigo-300 font-medium">3D Elev Z (ft)</span>
+                <input id="propDuctZ" type="number" min="0.5" max="35" step="0.25" value="${ductZ}"
+                  class="mt-1 w-full bg-slate-950 border border-indigo-500/50 rounded-lg px-2 py-1.5 font-mono text-xs text-indigo-200 focus:border-indigo-400 focus:outline-none" />
+              </label>
+            </div>
+            <label class="block">
+              <span class="text-[11px] text-slate-400">Duct Shape Override</span>
+              <div class="mt-1 grid grid-cols-3 gap-1 bg-slate-950 border border-slate-700 rounded-lg p-0.5">
+                <button data-shape-ov="global" class="shape-ov-btn py-1 rounded text-[11px] font-medium transition ${curShapeOverride === 'global' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'}">Global</button>
+                <button data-shape-ov="round" class="shape-ov-btn py-1 rounded text-[11px] font-medium transition ${curShapeOverride === 'round' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'}">Round</button>
+                <button data-shape-ov="rect" class="shape-ov-btn py-1 rounded text-[11px] font-medium transition ${curShapeOverride === 'rect' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'}">Rect</button>
+              </div>
+            </label>
+            ${rectHeightBlock}
+            <div class="grid grid-cols-2 gap-2">
+              <label class="block">
+                <span class="text-[11px] text-slate-400">CFM Override</span>
+                <input id="propDuctCfm" type="number" min="0" step="10" placeholder="Auto" value="${duct.manualCfm !== null ? duct.manualCfm : ''}"
+                  class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 font-mono text-xs text-sky-300 focus:border-sky-400 focus:outline-none" />
+              </label>
+              <label class="block">
+                <span class="text-[11px] text-slate-400">Size Override</span>
+                <select id="propDuctSize"
+                  class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-1.5 py-1.5 font-mono text-xs text-white focus:border-sky-400 focus:outline-none">
+                  ${sizeOptions}
+                </select>
+              </label>
+            </div>
+            <div class="bg-slate-950/80 border border-slate-800 rounded-lg p-2.5 space-y-1 font-mono text-[11px]">
+              <div class="flex justify-between items-center">
+                <span class="text-slate-400">Status</span>
+                <span class="px-2 py-0.5 rounded border text-[10px] font-bold ${statusClass}">${res.status || 'PASS'}</span>
+              </div>
+              <div class="flex justify-between"><span class="text-slate-400">Airflow</span><span class="text-white font-bold">${Math.round(res.cfm || 0)} CFM</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Straight / Eq</span><span class="text-slate-200">${(res.length || 0).toFixed(1)}' / ${(res.eqLength || 0).toFixed(0)}'</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Duct Size</span><span class="text-sky-300 font-bold">${res.sizeLabel || '—'}</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Equiv Ø (De)</span><span class="text-slate-300">${(res.de || 0).toFixed(1)}"</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Velocity</span><span class="${res.velFail ? 'text-rose-400 font-bold' : 'text-emerald-400'}">${Math.round(res.velocity || 0)} FPM</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Path Static</span><span class="${res.lossFail ? 'text-rose-400 font-bold' : 'text-emerald-400'}">${(res.pathLoss || 0).toFixed(3)} InWg</span></div>
+            </div>
+            <button id="btnDelItem" class="mt-1 w-full py-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 text-xs font-medium transition">Delete Duct</button>
+          `;
+
+          document.getElementById('propDuctName').oninput = (e) => { duct.name = e.target.value; inspectorTitle.textContent = duct.name; updateScheduleUI(); };
+          document.getElementById('propDuctZ').oninput = (e) => { const v = parseFloat(e.target.value); if (!isNaN(v) && v >= 0.2) { duct.elevation = v; recalculateSystem(); } };
+          inspectorBody.querySelectorAll('.shape-ov-btn').forEach((btn) => {
+            btn.onclick = () => { duct.shapeOverride = btn.dataset.shapeOv; duct.manualSize = null; recalculateSystem(); };
+          });
+          const hSel = document.getElementById('propDuctRectHeight');
+          if (hSel) hSel.onchange = (e) => { duct.rectHeight = e.target.value; duct.manualSize = null; recalculateSystem(); };
+          document.getElementById('propDuctCfm').oninput = (e) => { duct.manualCfm = e.target.value === '' ? null : Number(e.target.value); recalculateSystem(); };
+          document.getElementById('propDuctSize').onchange = (e) => { duct.manualSize = e.target.value === '' ? null : e.target.value; recalculateSystem(); };
+          document.getElementById('btnDelItem').onclick = deleteSelected;
+          return;
+        }
+
+        // PLUMBING PIPE INSPECTOR
+        if (sel.kind === 'pipe') {
+          const pipe = state.pipes.find((p) => p.id === sel.id);
+          if (!pipe) { state.selected = null; updateInspectorUI(); return; }
+          const res = state.computed.pipeResults[pipe.id] || {};
+          const ci = PIPE_COLORS[pipe.type];
+
+          inspectorTitle.textContent = pipe.name;
+          inspectorTypeBadge.textContent = ci.label.toUpperCase();
+          inspectorTypeBadge.className = `text-[10px] font-mono px-2 py-0.5 rounded border ${ci.badge}`;
+
+          const diaOpts = STANDARD_PIPE_IN.map((p) =>
+            `<option value="${p.val}" ${Math.abs(pipe.diameterIn - p.val) < 0.01 ? 'selected' : ''}>${p.label} Ø</option>`
+          ).join('');
+
+          const slopeOrEndZ = pipe.type === 'drain'
+            ? `<label class="block">
+                 <span class="text-[11px] text-purple-300">Slope (in / ft)</span>
+                 <select id="propPipeSlope" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 font-mono text-xs text-purple-200 focus:border-purple-400 focus:outline-none">
+                   <option value="0" ${pipe.slopeInPerFt === 0 ? 'selected' : ''}>0" (Flat)</option>
+                   <option value="0.125" ${pipe.slopeInPerFt === 0.125 ? 'selected' : ''}>1/8" per ft (1%)</option>
+                   <option value="0.25" ${pipe.slopeInPerFt === 0.25 ? 'selected' : ''}>1/4" per ft (2%)</option>
+                   <option value="0.5" ${pipe.slopeInPerFt === 0.5 ? 'selected' : ''}>1/2" per ft (4%)</option>
+                 </select>
+               </label>`
+            : `<label class="block">
+                 <span class="text-[11px] text-slate-400">End Elev Z (ft)</span>
+                 <input id="propPipeEndZ" type="number" min="0.2" max="35" step="0.25" placeholder="Same" value="${pipe.endElevation !== null && pipe.endElevation !== undefined ? pipe.endElevation : ''}"
+                   class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 font-mono text-xs text-cyan-200 focus:border-cyan-400 focus:outline-none" />
+               </label>`;
+
+          inspectorBody.innerHTML = `
+            <div class="grid grid-cols-2 gap-2">
+              <label class="block">
+                <span class="text-[11px] text-slate-400">Pipe Tag</span>
+                <input id="propPipeName" type="text" value="${pipe.name}"
+                  class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:border-sky-400 focus:outline-none" />
+              </label>
+              <label class="block">
+                <span class="text-[11px] text-slate-400">Diameter</span>
+                <select id="propPipeDia" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 font-mono text-xs text-cyan-300 focus:border-cyan-400 focus:outline-none">
+                  ${diaOpts}
+                </select>
+              </label>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <label class="block">
+                <span class="text-[11px] text-indigo-300 font-medium">Start Elev Z (ft)</span>
+                <input id="propPipeZ" type="number" min="0.2" max="35" step="0.25" value="${pipe.elevation}"
+                  class="mt-1 w-full bg-slate-950 border border-indigo-500/50 rounded-lg px-2 py-1.5 font-mono text-xs text-indigo-200 focus:border-indigo-400 focus:outline-none" />
+              </label>
+              ${slopeOrEndZ}
+            </div>
+            <div class="bg-slate-950/80 border border-slate-800 rounded-lg p-2.5 space-y-1.5 font-mono text-[11px]">
+              <div class="flex justify-between"><span class="text-slate-400">2D / 3D Run</span><span class="text-white font-bold">${(res.length || 0).toFixed(1)}' / ${(res.len3d || 0).toFixed(1)}'</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Elbows / Turns</span><span class="text-slate-200">${res.elbows || 0}</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Start → End Z</span><span class="text-indigo-300">${(res.startZ || 0).toFixed(2)}' → ${(res.endZ || 0).toFixed(2)}'</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Total Drop</span><span class="text-purple-300">${(res.dropIn || 0).toFixed(1)}"</span></div>
+            </div>
+            <button id="btnDelItem" class="mt-1 w-full py-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 text-xs font-medium transition">Delete Pipe</button>
+          `;
+
+          document.getElementById('propPipeName').oninput = (e) => { pipe.name = e.target.value; inspectorTitle.textContent = pipe.name; render(); updateScheduleUI(); };
+          document.getElementById('propPipeDia').onchange = (e) => { pipe.diameterIn = Number(e.target.value); recalculateSystem(); };
+          document.getElementById('propPipeZ').oninput = (e) => { const v = parseFloat(e.target.value); if (!isNaN(v) && v >= 0.1) { pipe.elevation = v; recalculateSystem(); } };
+          const slopeEl = document.getElementById('propPipeSlope');
+          if (slopeEl) slopeEl.onchange = (e) => { pipe.slopeInPerFt = Number(e.target.value); recalculateSystem(); };
+          const endZEl = document.getElementById('propPipeEndZ');
+          if (endZEl) endZEl.oninput = (e) => { pipe.endElevation = e.target.value === '' ? null : Number(e.target.value); recalculateSystem(); };
+          document.getElementById('btnDelItem').onclick = deleteSelected;
+          return;
+        }
+
+        // AHU INSPECTOR
+        if (sel.kind === 'ahu' && state.ahu) {
+          inspectorTitle.textContent = 'Air Handling Unit';
+          inspectorTypeBadge.textContent = 'AHU';
+          inspectorTypeBadge.className = 'text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/40';
+          inspectorBody.innerHTML = `
+            <p class="text-slate-400">Central Air Handling Unit. Drag in 2D to reposition.</p>
+            <div class="bg-slate-950/80 border border-slate-800 rounded-lg p-2.5 space-y-1.5 font-mono text-[11px]">
+              <div class="flex justify-between"><span class="text-slate-400">Position</span><span>${state.ahu.x} ft, ${state.ahu.y} ft</span></div>
+              <div class="flex justify-between"><span class="text-orange-300">Total Exhaust</span><span>${Math.round(state.computed.totalExhaustCfm)} CFM</span></div>
+              <div class="flex justify-between"><span class="text-sky-300">Return (${state.returnRatioPct}%)</span><span>${Math.round(state.computed.totalReturnCfm)} CFM</span></div>
+              <div class="flex justify-between"><span class="text-emerald-300">Fresh Air (${100 - state.returnRatioPct}%)</span><span>${Math.round(state.computed.totalFreshCfm)} CFM</span></div>
+            </div>
+            <button id="btnDelItem" class="mt-1 w-full py-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 text-xs font-medium transition">Remove AHU</button>
+          `;
+          document.getElementById('btnDelItem').onclick = deleteSelected;
+        }
+      }
+
+      function updateScheduleUI() {
+        document.getElementById('countDucts').textContent = state.ducts.length;
+        document.getElementById('countPipes').textContent = state.pipes.length;
+        document.getElementById('countRooms').textContent = state.rooms.length;
+
+        // Ducts Table
+        const tbodyDucts = document.getElementById('tbodyDucts');
+        if (state.ducts.length === 0) {
+          tbodyDucts.innerHTML = `<tr><td colspan="11" class="py-6 text-center text-slate-500 font-sans">No ducts drawn yet. Select Exhaust or Return duct tool to route ductwork.</td></tr>`;
+        } else {
+          tbodyDucts.innerHTML = state.ducts.map((d) => {
+            const r = state.computed.ductResults[d.id] || {};
+            const ci = DUCT_COLORS[d.type];
+            const isSel = state.selected && state.selected.kind === 'duct' && state.selected.id === d.id;
+            const shapeText = r.effectiveShape === 'rect' ? 'Rect' : 'Round';
+            const elev = (d.elevation ?? ci.defaultZ).toFixed(1);
+            const statusPill = r.status === 'FAIL'
+              ? '<span class="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[10px] font-bold">FAIL</span>'
+              : r.status === 'WARN'
+                ? '<span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold">WARN</span>'
+                : '<span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold">PASS</span>';
+
+            return `
+              <tr data-duct-id="${d.id}" class="cursor-pointer hover:bg-slate-800/70 transition ${isSel ? 'bg-sky-500/15' : ''}">
+                <td class="py-1.5 px-3 font-semibold text-slate-200">${d.name}</td>
+                <td class="py-1.5 px-2"><span class="px-1.5 py-0.5 rounded border text-[10px] ${ci.badge}">${ci.label}</span></td>
+                <td class="py-1.5 px-2 text-slate-300">${shapeText}</td>
+                <td class="py-1.5 px-2 text-right text-sky-300 font-semibold">${r.sizeLabel || '—'}</td>
+                <td class="py-1.5 px-2 text-right text-indigo-300">${elev}'</td>
+                <td class="py-1.5 px-2 text-right text-white font-semibold">${Math.round(r.cfm || 0)}</td>
+                <td class="py-1.5 px-2 text-right text-slate-300">${(r.length || 0).toFixed(1)}</td>
+                <td class="py-1.5 px-2 text-right text-slate-400">${r.elbows || 0}</td>
+                <td class="py-1.5 px-2 text-right ${r.velFail ? 'text-rose-400 font-bold' : 'text-slate-200'}">${Math.round(r.velocity || 0)} fpm</td>
+                <td class="py-1.5 px-2 text-right ${r.lossFail ? 'text-rose-400 font-bold' : 'text-slate-200'}">${(r.pathLoss || 0).toFixed(3)}</td>
+                <td class="py-1.5 px-3 text-center">${statusPill}</td>
+              </tr>`;
+          }).join('');
+
+          tbodyDucts.querySelectorAll('tr[data-duct-id]').forEach((row) => {
+            row.onclick = () => {
+              state.selected = { kind: 'duct', id: row.dataset.ductId };
+              updateInspectorUI(); updateScheduleUI(); render();
+              if (state.viewMode === '3d') rebuild3DScene();
+            };
+          });
+        }
+
+        // Plumbing Table
+        const tbodyPlumbing = document.getElementById('tbodyPlumbing');
+        if (state.pipes.length === 0) {
+          tbodyPlumbing.innerHTML = `<tr><td colspan="9" class="py-6 text-center text-slate-500 font-sans">No plumbing pipes drawn yet. Use Cold Water, Hot Water, or Drain/DWV tools.</td></tr>`;
+        } else {
+          tbodyPlumbing.innerHTML = state.pipes.map((p) => {
+            const r = state.computed.pipeResults[p.id] || {};
+            const ci = PIPE_COLORS[p.type];
+            const isSel = state.selected && state.selected.kind === 'pipe' && state.selected.id === p.id;
+            const slopeTxt = p.type === 'drain' ? `${p.slopeInPerFt}"/ft` : '—';
+            return `
+              <tr data-pipe-id="${p.id}" class="cursor-pointer hover:bg-slate-800/70 transition ${isSel ? 'bg-sky-500/15' : ''}">
+                <td class="py-1.5 px-3 font-semibold text-slate-200">${p.name}</td>
+                <td class="py-1.5 px-2"><span class="px-1.5 py-0.5 rounded border text-[10px] ${ci.badge}">${ci.label}</span></td>
+                <td class="py-1.5 px-2 text-right text-cyan-300 font-semibold">${formatPipeDia(p.diameterIn)}</td>
+                <td class="py-1.5 px-2 text-right text-indigo-300">${(r.startZ || 0).toFixed(2)}'</td>
+                <td class="py-1.5 px-2 text-right text-indigo-300">${(r.endZ || 0).toFixed(2)}'</td>
+                <td class="py-1.5 px-2 text-right text-purple-300">${slopeTxt}</td>
+                <td class="py-1.5 px-2 text-right text-slate-200">${(r.len3d || 0).toFixed(1)}</td>
+                <td class="py-1.5 px-2 text-right text-slate-400">${r.elbows || 0}</td>
+                <td class="py-1.5 px-3 text-right text-purple-300">${(r.dropIn || 0).toFixed(1)}"</td>
+              </tr>`;
+          }).join('');
+
+          tbodyPlumbing.querySelectorAll('tr[data-pipe-id]').forEach((row) => {
+            row.onclick = () => {
+              state.selected = { kind: 'pipe', id: row.dataset.pipeId };
+              updateInspectorUI(); updateScheduleUI(); render();
+              if (state.viewMode === '3d') rebuild3DScene();
+            };
+          });
+        }
+
+        // Rooms Table
+        const tbodyRooms = document.getElementById('tbodyRooms');
+        if (state.rooms.length === 0) {
+          tbodyRooms.innerHTML = `<tr><td colspan="8" class="py-6 text-center text-slate-500 font-sans">No rooms created yet. Draw a Rect, Circle, or Polygon room on the floorplan.</td></tr>`;
+        } else {
+          tbodyRooms.innerHTML = state.rooms.map((rm) => {
+            const r = state.computed.roomResults[rm.id] || {};
+            const isSel = state.selected && state.selected.kind === 'room' && state.selected.id === rm.id;
+            return `
+              <tr data-room-id="${rm.id}" class="cursor-pointer hover:bg-slate-800/70 transition ${isSel ? 'bg-sky-500/15' : ''}">
+                <td class="py-1.5 px-3 font-sans font-semibold text-slate-200">${rm.name}</td>
+                <td class="py-1.5 px-2 uppercase text-slate-400 text-[10px]">${rm.shape}</td>
+                <td class="py-1.5 px-2 text-right text-slate-300">${(r.area || 0).toFixed(1)}</td>
+                <td class="py-1.5 px-2 text-right text-slate-300">${rm.height}</td>
+                <td class="py-1.5 px-2 text-right text-slate-400">${Math.round(r.volume || 0)}</td>
+                <td class="py-1.5 px-2 text-right text-sky-300 font-semibold">${rm.ach}</td>
+                <td class="py-1.5 px-2 text-right text-orange-300 font-semibold">${(r.exhaustCfm || 0).toFixed(1)}</td>
+                <td class="py-1.5 px-3 text-right text-sky-300 font-semibold">${(r.returnCfm || 0).toFixed(1)}</td>
+              </tr>`;
+          }).join('');
+
+          tbodyRooms.querySelectorAll('tr[data-room-id]').forEach((row) => {
+            row.onclick = () => {
+              state.selected = { kind: 'room', id: row.dataset.roomId };
+              updateInspectorUI(); updateScheduleUI(); render();
+              if (state.viewMode === '3d') rebuild3DScene();
+            };
+          });
+        }
+      }
+
+      // =========================================================================
+      // 11. TOOLBAR, ACTIONS & SAMPLE MEP FLOORPLAN
+      // =========================================================================
+      const TOOL_HINTS = {
+        select: 'Click a room, duct, or pipe to inspect & edit. Drag handles to resize or reroute.',
+        pan: 'Click and drag to pan the blueprint. Scroll wheel to zoom.',
+        rect: 'Click and drag on the grid to draw a Rectangular Room (feet).',
+        circle: 'Click center and drag outward to draw a Circular Room (feet).',
+        poly: 'Click points to draw a Polygon / L-Shape room. Click green start or press Enter to close.',
+        ahu: 'Click anywhere on the floorplan to place the Air Handling Unit (AHU).',
+        duct_exhaust: 'Click to route Exhaust Duct (100% room CFM, default Z=8.5 ft). Double-click/Enter to finish.',
+        duct_return: 'Click to route Return Duct (scaled by Return %, default Z=9.2 ft). Double-click/Enter to finish.',
+        pipe_cold: 'Click to route Cold Water Pipe (default 1" Ø, Z=7.6 ft). Double-click/Enter to finish.',
+        pipe_hot: 'Click to route Hot Water Pipe (default 3/4" Ø, Z=7.2 ft). Double-click/Enter to finish.',
+        pipe_drain: 'Click to route Drain / DWV Pipe (default 3" Ø, 1/4"/ft slope, Z=1.8 ft). Double-click/Enter to finish.',
+      };
+
+      function setTool(toolName) {
+        if (state.viewMode === '3d' && toolName !== 'select') {
+          setViewMode('2d');
+        }
+        cancelDraft();
+        state.tool = toolName;
+        if (state.viewMode === '2d') {
+          toolHintText.textContent = TOOL_HINTS[toolName] || '';
+        }
+        canvas.style.cursor = toolName === 'pan' ? 'grab' : toolName === 'select' ? 'default' : 'crosshair';
+        document.querySelectorAll('.tool-btn').forEach((btn) => {
+          const active = btn.dataset.tool === toolName;
+          btn.className = `tool-btn flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition ${
+            active ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-300 hover:bg-slate-800'
+          }`;
+        });
+      }
+
+      function deleteSelected() {
+        if (!state.selected) return;
+        const sel = state.selected;
+        if (sel.kind === 'room') {
+          state.rooms = state.rooms.filter((r) => r.id !== sel.id);
+          showToast('Deleted room');
+        } else if (sel.kind === 'duct') {
+          state.ducts = state.ducts.filter((d) => d.id !== sel.id);
+          showToast('Deleted duct');
+        } else if (sel.kind === 'pipe') {
+          state.pipes = state.pipes.filter((p) => p.id !== sel.id);
+          showToast('Deleted plumbing pipe');
+        } else if (sel.kind === 'ahu') {
+          state.ahu = null;
+          showToast('Removed AHU');
+        }
+        state.selected = null;
+        recalculateSystem();
+      }
+
+      function fitViewToContent() {
+        const pts = [];
+        state.rooms.forEach((r) => {
+          if (r.shape === 'rect') {
+            pts.push({ x: r.x, y: r.y }, { x: r.x + r.w, y: r.y + r.h });
+          } else if (r.shape === 'circle') {
+            pts.push({ x: r.cx - r.r, y: r.cy - r.r }, { x: r.cx + r.r, y: r.cy + r.r });
+          } else if (r.shape === 'poly') {
+            r.points.forEach((p) => pts.push(p));
+          }
+        });
+        if (state.ahu) pts.push({ x: state.ahu.x, y: state.ahu.y }, { x: state.ahu.x + state.ahu.w, y: state.ahu.y + state.ahu.h });
+
+        if (pts.length === 0) {
+          state.zoom = 18; state.panX = 80; state.panY = 70;
+          hudZoom.textContent = '100%';
+          render();
+          return;
+        }
+
+        const minX = Math.min(...pts.map((p) => p.x)) - 3;
+        const maxX = Math.max(...pts.map((p) => p.x)) + 4;
+        const minY = Math.min(...pts.map((p) => p.y)) - 3;
+        const maxY = Math.max(...pts.map((p) => p.y)) + 4;
+
+        const cw = canvas.clientWidth || 800;
+        const ch = canvas.clientHeight || 500;
+        const zoomX = cw / Math.max(10, maxX - minX);
+        const zoomY = ch / Math.max(10, maxY - minY);
+        state.zoom = Math.max(7, Math.min(36, Math.min(zoomX, zoomY) * 0.9));
+        state.panX = (cw - (maxX + minX) * state.zoom) / 2;
+        state.panY = (ch - (maxY + minY) * state.zoom) / 2;
+        hudZoom.textContent = `${Math.round((state.zoom / 18) * 100)}%`;
+        render();
+      }
+
+      function loadSamplePlan() {
+        cancelDraft();
+        state.rooms = [
+          { id: genId('room'), name: 'Conference Room', shape: 'rect', x: 2, y: 2, w: 18, h: 14, height: 10, ach: 8 },
+          { id: genId('room'), name: 'Open Office', shape: 'rect', x: 20, y: 2, w: 22, h: 15, height: 10, ach: 6 },
+          { id: genId('room'), name: 'Circular Studio', shape: 'circle', cx: 11, cy: 25, r: 7, height: 10, ach: 6 },
+        ];
+        state.ahu = { x: 32, y: 22, w: 5, h: 4 };
+
+        state.ducts = [
+          { id: genId('duct'), name: 'EX-Trunk', type: 'exhaust', elevation: 8.4, points: [{ x: 33, y: 9 }, { x: 33, y: 24 }, { x: 34.5, y: 24 }], manualCfm: null, manualSize: null, shapeOverride: 'global', rectHeight: 'global' },
+          { id: genId('duct'), name: 'EX-Conf', type: 'exhaust', elevation: 8.4, points: [{ x: 11, y: 8 }, { x: 11, y: 19 }, { x: 33, y: 19 }], manualCfm: null, manualSize: null, shapeOverride: 'global', rectHeight: 'global' },
+          { id: genId('duct'), name: 'EX-Studio', type: 'exhaust', elevation: 8.4, points: [{ x: 11, y: 24 }, { x: 34.5, y: 24 }], manualCfm: null, manualSize: null, shapeOverride: 'global', rectHeight: 'global' },
+
+          { id: genId('duct'), name: 'RT-Trunk', type: 'return', elevation: 9.2, points: [{ x: 28, y: 12 }, { x: 28, y: 22 }, { x: 34.5, y: 22 }], manualCfm: null, manualSize: null, shapeOverride: 'global', rectHeight: 'global' },
+          { id: genId('duct'), name: 'RT-Conf', type: 'return', elevation: 9.2, points: [{ x: 14, y: 12 }, { x: 14, y: 21 }, { x: 28, y: 21 }], manualCfm: null, manualSize: null, shapeOverride: 'global', rectHeight: 'global' },
+          { id: genId('duct'), name: 'RT-Studio', type: 'return', elevation: 9.2, points: [{ x: 13, y: 27 }, { x: 34.5, y: 27 }, { x: 34.5, y: 24 }], manualCfm: null, manualSize: null, shapeOverride: 'global', rectHeight: 'global' },
+        ];
+
+        state.pipes = [
+          { id: genId('pipe'), name: 'CW-Main', type: 'cold', diameterIn: 1, elevation: 7.5, endElevation: null, slopeInPerFt: 0, points: [{ x: 40, y: 4 }, { x: 22, y: 4 }, { x: 22, y: 15 }, { x: 5, y: 15 }] },
+          { id: genId('pipe'), name: 'HW-Main', type: 'hot', diameterIn: 0.75, elevation: 7.0, endElevation: null, slopeInPerFt: 0, points: [{ x: 40, y: 5 }, { x: 23, y: 5 }, { x: 23, y: 16 }, { x: 5, y: 16 }] },
+          { id: genId('pipe'), name: 'DWV-Main', type: 'drain', diameterIn: 3, elevation: 2.2, endElevation: null, slopeInPerFt: 0.25, points: [{ x: 5, y: 15 }, { x: 21, y: 15 }, { x: 21, y: 31 }, { x: 40, y: 31 }] },
+        ];
+
+        state.selected = null;
+        recalculateSystem();
+        fitViewToContent();
+        if (state.viewMode === '3d') set3DCameraPreset('iso');
+        showToast('Loaded sample HVAC + Plumbing MEP layout');
+      }
+
+      // =========================================================================
+      // 12. EVENT BINDINGS
+      // =========================================================================
+      btnView2D.addEventListener('click', () => setViewMode('2d'));
+      btnView3D.addEventListener('click', () => setViewMode('3d'));
+
+      document.querySelectorAll('.cam-btn').forEach((btn) => {
+        btn.addEventListener('click', () => set3DCameraPreset(btn.dataset.cam));
+      });
+
+      document.getElementById('btn3DWalls').addEventListener('click', (e) => {
+        const order = ['xray', 'solid', 'wire'];
+        const labels = { xray: 'Walls: X-Ray', solid: 'Walls: Solid', wire: 'Walls: Wire' };
+        state.show3DWalls = order[(order.indexOf(state.show3DWalls) + 1) % order.length];
+        e.currentTarget.textContent = labels[state.show3DWalls];
+        rebuild3DScene();
+      });
+
+      document.getElementById('btn3DHvac').addEventListener('click', (e) => {
+        state.show3DHvac = !state.show3DHvac;
+        e.currentTarget.className = state.show3DHvac
+          ? 'px-2 py-1 rounded bg-orange-500/20 text-orange-200 border border-orange-500/40 font-medium'
+          : 'px-2 py-1 rounded bg-slate-800 text-slate-500 border border-slate-700 font-medium';
+        rebuild3DScene();
+      });
+
+      document.getElementById('btn3DPlumbing').addEventListener('click', (e) => {
+        state.show3DPlumbing = !state.show3DPlumbing;
+        e.currentTarget.className = state.show3DPlumbing
+          ? 'px-2 py-1 rounded bg-cyan-500/20 text-cyan-200 border border-cyan-500/40 font-medium'
+          : 'px-2 py-1 rounded bg-slate-800 text-slate-500 border border-slate-700 font-medium';
+        rebuild3DScene();
+      });
+
+      document.querySelectorAll('.tool-btn').forEach((btn) => {
+        btn.addEventListener('click', () => setTool(btn.dataset.tool));
+      });
+
+      inputMaxVel.addEventListener('input', () => {
+        const v = parseFloat(inputMaxVel.value);
+        if (v > 0) { state.maxVelocity = v; recalculateSystem(); }
+      });
+
+      inputMaxStatic.addEventListener('input', () => {
+        const v = parseFloat(inputMaxStatic.value);
+        if (v > 0) { state.maxStaticLoss = v; recalculateSystem(); }
+      });
+
+      inputReturnRatio.addEventListener('input', () => {
+        const v = Math.max(0, Math.min(100, parseFloat(inputReturnRatio.value) || 0));
+        state.returnRatioPct = v;
+        labelFreshRatio.textContent = `OA ${100 - v}%`;
+        recalculateSystem();
+      });
+
+      btnShapeRound.addEventListener('click', () => {
+        state.ductShape = 'round';
+        btnShapeRound.className = 'px-2.5 py-1 rounded-md text-xs font-semibold transition bg-sky-600 text-white shadow';
+        btnShapeRect.className = 'px-2.5 py-1 rounded-md text-xs font-semibold transition text-slate-300 hover:text-white';
+        selectGlobalRectHeight.classList.add('hidden');
+        recalculateSystem();
+      });
+
+      btnShapeRect.addEventListener('click', () => {
+        state.ductShape = 'rect';
+        btnShapeRect.className = 'px-2.5 py-1 rounded-md text-xs font-semibold transition bg-sky-600 text-white shadow';
+        btnShapeRound.className = 'px-2.5 py-1 rounded-md text-xs font-semibold transition text-slate-300 hover:text-white';
+        selectGlobalRectHeight.classList.remove('hidden');
+        recalculateSystem();
+      });
+
+      selectGlobalRectHeight.addEventListener('change', () => {
+        state.rectMaxHeight = selectGlobalRectHeight.value;
+        recalculateSystem();
+      });
+
+      document.getElementById('btnToggleSnap').addEventListener('click', () => {
+        state.snapGrid = !state.snapGrid;
+        document.getElementById('snapBadge').textContent = state.snapGrid ? 'ON' : 'OFF';
+        document.getElementById('btnToggleSnap').className = `flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium border transition ${
+          state.snapGrid ? 'bg-sky-500/15 text-sky-300 border-sky-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'
+        }`;
+      });
+
+      document.getElementById('btnToggleOrtho').addEventListener('click', () => {
+        state.orthoSnap = !state.orthoSnap;
+        document.getElementById('orthoBadge').textContent = state.orthoSnap ? 'ON' : 'OFF';
+        document.getElementById('btnToggleOrtho').className = `flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium border transition ${
+          state.orthoSnap ? 'bg-sky-500/15 text-sky-300 border-sky-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'
+        }`;
+      });
+
+      document.getElementById('btnFinishDraw').addEventListener('click', finishDraft);
+      document.getElementById('btnCancelDraw').addEventListener('click', cancelDraft);
+      document.getElementById('btnLoadSample').addEventListener('click', loadSamplePlan);
+      document.getElementById('btnDeleteSelected').addEventListener('click', deleteSelected);
+
+      document.getElementById('btnClearAll').addEventListener('click', () => {
+        cancelDraft();
+        state.rooms = [];
+        state.ducts = [];
+        state.pipes = [];
+        state.ahu = null;
+        state.selected = null;
+        recalculateSystem();
+        showToast('Floorplan cleared');
+      });
+
+      document.getElementById('btnZoomIn').addEventListener('click', () => {
+        state.zoom = Math.min(70, state.zoom * 1.2);
+        hudZoom.textContent = `${Math.round((state.zoom / 18) * 100)}%`;
+        render();
+      });
+      document.getElementById('btnZoomOut').addEventListener('click', () => {
+        state.zoom = Math.max(5, state.zoom / 1.2);
+        hudZoom.textContent = `${Math.round((state.zoom / 18) * 100)}%`;
+        render();
+      });
+      document.getElementById('btnZoomFit').addEventListener('click', fitViewToContent);
+
+      // Schedule Tabs
+      const tabs = {
+        ducts: { btn: document.getElementById('tabDucts'), tbl: document.getElementById('tableDucts') },
+        plumbing: { btn: document.getElementById('tabPlumbing'), tbl: document.getElementById('tablePlumbing') },
+        rooms: { btn: document.getElementById('tabRooms'), tbl: document.getElementById('tableRooms') },
+      };
+
+      function switchTab(name) {
+        state.activeTab = name;
+        Object.entries(tabs).forEach(([k, { btn, tbl }]) => {
+          const active = k === name;
+          tbl.classList.toggle('hidden', !active);
+          btn.className = active
+            ? 'px-3 py-1 rounded-md text-xs font-semibold bg-sky-600/20 text-sky-300 border border-sky-500/30 transition whitespace-nowrap'
+            : 'px-3 py-1 rounded-md text-xs font-semibold text-slate-400 hover:text-slate-200 border border-transparent transition whitespace-nowrap';
+        });
+      }
+
+      tabs.ducts.btn.addEventListener('click', () => switchTab('ducts'));
+      tabs.plumbing.btn.addEventListener('click', () => switchTab('plumbing'));
+      tabs.rooms.btn.addEventListener('click', () => switchTab('rooms'));
+
+      document.getElementById('btnToggleSchedule').addEventListener('click', () => {
+        state.scheduleCollapsed = !state.scheduleCollapsed;
+        const drawer = document.getElementById('scheduleDrawer');
+        drawer.style.height = state.scheduleCollapsed ? '40px' : '205px';
+        document.getElementById('scheduleToggleLabel').textContent = state.scheduleCollapsed ? 'Expand' : 'Collapse';
+        document.getElementById('scheduleChevron').style.transform = state.scheduleCollapsed ? 'rotate(180deg)' : 'rotate(0deg)';
+        setTimeout(resizeCanvas, 220);
+      });
+
+      document.getElementById('btnToggleInspectorMobile').addEventListener('click', () => {
+        inspectorPanel.classList.toggle('hidden');
+        inspectorPanel.classList.toggle('flex');
+        inspectorPanel.classList.toggle('absolute');
+        inspectorPanel.classList.toggle('right-0');
+        inspectorPanel.classList.toggle('top-0');
+        inspectorPanel.classList.toggle('bottom-0');
+      });
+
+      // Keyboard Shortcuts
+      window.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+        const key = e.key.toLowerCase();
+        if (key === 'enter' && state.draftPoints.length >= 2) { finishDraft(); return; }
+        if (key === 'escape') { cancelDraft(); setTool('select'); return; }
+        if (key === 'delete' || key === 'backspace') { deleteSelected(); return; }
+        if (key === '2') { setViewMode('2d'); return; }
+        if (key === '3') { setViewMode('3d'); return; }
+        if (key === 'v') setTool('select');
+        else if (key === 'h') setTool('pan');
+        else if (key === 'r') setTool('rect');
+        else if (key === 'c') setTool('circle');
+        else if (key === 'p') setTool('poly');
+        else if (key === 'a') setTool('ahu');
+        else if (key === 'e') setTool('duct_exhaust');
+        else if (key === 't') setTool('duct_return');
+        else if (key === 'w') setTool('pipe_cold');
+        else if (key === 'o') setTool('pipe_hot');
+        else if (key === 'd') setTool('pipe_drain');
+      });
+
+      window.addEventListener('resize', resizeCanvas);
+
+      // =========================================================================
+      // 13. INITIALIZATION
+      // =========================================================================
+      window.addEventListener('load', () => {
+        resizeCanvas();
+        loadSamplePlan();
+      });
+    })();
+  </script>
+</body>
+</html>
