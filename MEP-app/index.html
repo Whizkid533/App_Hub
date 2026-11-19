@@ -335,7 +335,7 @@
       <!-- 2D HUD: Bottom-Left Coordinates & Scale -->
       <div id="hud2DLeft" class="pointer-events-none absolute bottom-3 left-3 flex items-center gap-2 z-10">
         <div class="bg-slate-900/90 backdrop-blur border border-slate-700/80 rounded-lg px-2.5 py-1 text-[11px] font-mono text-slate-300 shadow">
-          X: <span id="hudX" class="text-sky-300">0.0</span> ft &nbsp;|&nbsp; Y: <span id="hudY" class="text-sky-300">0.0</span> ft
+          X: <span id="hudX" class="text-sky-300">0.0</span> &nbsp;|&nbsp; Y: <span id="hudY" class="text-sky-300">0.0</span>
         </div>
         <div class="hidden sm:block bg-slate-900/90 backdrop-blur border border-slate-700/80 rounded-lg px-2.5 py-1 text-[11px] font-mono text-slate-400 shadow">
           Zoom: <span id="hudZoom" class="text-slate-200">100%</span>
@@ -509,8 +509,8 @@
       };
 
       const PIPE_COLORS = {
-        cold:  { stroke: '#06b6d4', hex3d: 0x06b6d4, label: 'Cold Water', prefix: 'CW',  defaultZ: 7.6, defaultDia: 1,    defaultSlope: 0,    badge: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' },
-        hot:   { stroke: '#f43f5e', hex3d: 0xf43f5e, label: 'Hot Water',  prefix: 'HW',  defaultZ: 7.2, defaultDia: 0.75, defaultSlope: 0,    badge: 'bg-rose-500/20 text-rose-300 border-rose-500/40' },
+        cold:  { stroke: '#06b6d4', hex3d: 0x06b6d4, label: 'Cold Water',  prefix: 'CW',  defaultZ: 7.6, defaultDia: 1,    defaultSlope: 0,    badge: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' },
+        hot:   { stroke: '#f43f5e', hex3d: 0xf43f5e, label: 'Hot Water',   prefix: 'HW',  defaultZ: 7.2, defaultDia: 0.75, defaultSlope: 0,    badge: 'bg-rose-500/20 text-rose-300 border-rose-500/40' },
         drain: { stroke: '#a855f7', hex3d: 0xa855f7, label: 'Drain / DWV', prefix: 'DWV', defaultZ: 1.8, defaultDia: 3,    defaultSlope: 0.25, badge: 'bg-purple-500/20 text-purple-300 border-purple-500/40' },
       };
 
@@ -528,7 +528,7 @@
         maxVelocity: 800,
         maxStaticLoss: 0.5,
         returnRatioPct: 90,
-        ductShape: 'round',
+        ductShape: 'round', // 'round' | 'rect'
         rectMaxHeight: 'auto',
 
         // 2D Viewport / Camera (World units = feet)
@@ -540,7 +540,68 @@
         tool: 'select',
         snapMode: '0.1in', // '0.1in' | '0.1ft' | '1in' | '1ft' | 'off'
         orthoSnap: true,
-// ... existing code ... -->
+
+        // Entities
+        rooms: [],
+        ahu: null, // { id, x, y, w, h, z }
+        ducts: [], // { id, name, type, points, shapeOverride, rectHeightOverride, z }
+        pipes: [], // { id, name, type, points, diameterIn, z, slopeInPerFt }
+
+        // Selection & Active Drawing Buffers
+        selected: null, // { kind: 'room'|'ahu'|'duct'|'pipe', id }
+        draftRect: null,
+        draftCircle: null,
+        draftPoly: [],
+        draftDuct: null,
+        draftPipe: null,
+
+        // Pointer Interaction State
+        mouseWorld: { x: 0, y: 0 },
+        isDragging: false,
+        dragMode: null,
+        dragStartWorld: null,
+        dragStartScreen: null,
+        dragTargetMeta: null,
+
+        // Computed Results
+        computed: {
+          roomResults: {},
+          ductResults: {},
+          pipeResults: {},
+          clashes: [],
+          totalExhaustCfm: 0,
+          totalReturnCfm: 0,
+          totalFreshCfm: 0,
+          totalPlumbingFt: 0,
+          peakVel: 0,
+          maxStatic: 0,
+          hasWarning: false,
+        },
+
+        // UI State
+        activeTab: 'ducts',
+        scheduleExpanded: true,
+        clearConfirmTimer: null,
+        clearPending: false,
+        idSeq: 1,
+      };
+
+      // =========================================================================
+      // 3. DOM REFERENCES
+      // =========================================================================
+      const canvas = document.getElementById('cadCanvas');
+      const ctx = canvas.getContext('2d');
+      const container = document.getElementById('canvasContainer');
+      const view3DContainer = document.getElementById('view3DContainer');
+
+      const btnView2D = document.getElementById('btnView2D');
+      const btnView3D = document.getElementById('btnView3D');
+      const hud2DLeft = document.getElementById('hud2DLeft');
+      const hud2DRight = document.getElementById('hud2DRight');
+      const hud3DControls = document.getElementById('hud3DControls');
+
+      const hudX = document.getElementById('hudX');
+      const hudY = document.getElementById('hudY');
       const hudZoom = document.getElementById('hudZoom');
       const toolHintText = document.getElementById('toolHintText');
       const drawingActions = document.getElementById('drawingActions');
@@ -549,7 +610,24 @@
       const quickCircleFields = document.getElementById('quickCircleFields');
       const selectSnapStep = document.getElementById('selectSnapStep');
       const snapBadge = document.getElementById('snapBadge');
-// ... existing code ... -->
+      const toastEl = document.getElementById('toast');
+
+      const inspectorPanel = document.getElementById('inspectorPanel');
+      const inspectorTitle = document.getElementById('inspectorTitle');
+      const inspectorTypeBadge = document.getElementById('inspectorTypeBadge');
+      const inspectorBody = document.getElementById('inspectorBody');
+
+      const btnShapeRound = document.getElementById('btnShapeRound');
+      const btnShapeRect = document.getElementById('btnShapeRect');
+      const selectGlobalRectHeight = document.getElementById('selectGlobalRectHeight');
+
+      // =========================================================================
+      // 4. UTILITY, SNAPPING & FORMATTING FUNCTIONS
+      // =========================================================================
+      function genId(prefix) {
+        return `${prefix}_${state.idSeq++}`;
+      }
+
       function dist(a, b) {
         return Math.hypot(a.x - b.x, a.y - b.y);
       }
@@ -577,16 +655,523 @@
         return `${sign}${wholeFt}' ${inStr}`;
       }
 
-      function formatDimDisplay(ft) {
-        if (state.snapMode === '0.1in' || state.snapMode === '1in') {
-          return `${formatFt(ft)} ft (${formatFtIn(ft)})`;
-        }
-        return `${formatFt(ft)} ft`;
+      function formatPipeDia(val) {
+        const found = STANDARD_PIPE_IN.find((p) => Math.abs(p.val - val) < 0.01);
+        return found ? found.label : `${val}"`;
       }
-// ... existing code ... -->
+
+      function worldToScreen(wx, wy) {
+        return {
+          x: wx * state.zoom + state.panX,
+          y: wy * state.zoom + state.panY,
+        };
+      }
+
+      function screenToWorld(sx, sy) {
+        return {
+          x: (sx - state.panX) / state.zoom,
+          y: (sy - state.panY) / state.zoom,
+        };
+      }
+
+      let toastTimer = null;
+      function showToast(msg) {
+        toastEl.textContent = msg;
+        toastEl.classList.remove('opacity-0');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toastEl.classList.add('opacity-0'), 2400);
+      }
+
+      // =========================================================================
+      // 5. GEOMETRY HELPERS
+      // =========================================================================
+      function polygonArea(pts) {
+        if (!pts || pts.length < 3) return 0;
+        let area = 0;
+        for (let i = 0; i < pts.length; i++) {
+          const j = (i + 1) % pts.length;
+          area += pts[i].x * pts[j].y - pts[j].x * pts[i].y;
+        }
+        return Math.abs(area) / 2;
+      }
+
+      function polygonCentroid(pts) {
+        if (!pts || pts.length === 0) return { x: 0, y: 0 };
+        let cx = 0, cy = 0;
+        for (const p of pts) { cx += p.x; cy += p.y; }
+        return { x: cx / pts.length, y: cy / pts.length };
+      }
+
+      function getRoomArea(room) {
+        if (room.shape === 'rect') return Math.max(0, room.w * room.h);
+        if (room.shape === 'circle') return Math.PI * room.r * room.r;
+        if (room.shape === 'poly') return polygonArea(room.points);
+        return 0;
+      }
+
+      function getRoomCenter(room) {
+        if (room.shape === 'rect') return { x: room.x + room.w / 2, y: room.y + room.h / 2 };
+        if (room.shape === 'circle') return { x: room.cx, y: room.cy };
+        if (room.shape === 'poly') return polygonCentroid(room.points);
+        return { x: 0, y: 0 };
+      }
+
+      function pointInPolygon(pt, vs) {
+        let inside = false;
+        for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+          const xi = vs[i].x, yi = vs[i].y;
+          const xj = vs[j].x, yj = vs[j].y;
+          const intersect = ((yi > pt.y) !== (yj > pt.y)) &&
+            (pt.x < (xj - xi) * (pt.y - yi) / ((yj - yi) || 1e-9) + xi);
+          if (intersect) inside = !inside;
+        }
+        return inside;
+      }
+
+      function pointInRoom(pt, room) {
+        if (room.shape === 'rect') {
+          return pt.x >= room.x && pt.x <= room.x + room.w && pt.y >= room.y && pt.y <= room.y + room.h;
+        }
+        if (room.shape === 'circle') {
+          return dist(pt, { x: room.cx, y: room.cy }) <= room.r;
+        }
+        if (room.shape === 'poly') {
+          return pointInPolygon(pt, room.points);
+        }
+        return false;
+      }
+
+      function distToSegment(p, a, b) {
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const l2 = dx * dx + dy * dy;
+        if (l2 === 0) return dist(p, a);
+        let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2;
+        t = Math.max(0, Math.min(1, t));
+        return dist(p, { x: a.x + t * dx, y: a.y + t * dy });
+      }
+
+      function closestPointOnSegment(p, a, b) {
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const l2 = dx * dx + dy * dy;
+        if (l2 === 0) return { x: a.x, y: a.y };
+        let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2;
+        t = Math.max(0, Math.min(1, t));
+        return { x: a.x + t * dx, y: a.y + t * dy };
+      }
+
+      function polylineLength(pts) {
+        let len = 0;
+        for (let i = 1; i < pts.length; i++) len += dist(pts[i - 1], pts[i]);
+        return len;
+      }
+
+      function countElbows(pts) {
+        let count = 0;
+        for (let i = 1; i < pts.length - 1; i++) {
+          const v1x = pts[i].x - pts[i - 1].x;
+          const v1y = pts[i].y - pts[i - 1].y;
+          const v2x = pts[i + 1].x - pts[i].x;
+          const v2y = pts[i + 1].y - pts[i].y;
+          const m1 = Math.hypot(v1x, v1y);
+          const m2 = Math.hypot(v2x, v2y);
+          if (m1 < 0.05 || m2 < 0.05) continue;
+          const cos = (v1x * v2x + v1y * v2y) / (m1 * m2);
+          if (cos < 0.96) count++;
+        }
+        return count;
+      }
+
+      function dist3DSegmentToSegment(a1, a2, b1, b2) {
+        // Sampled closest distance between two 3D segments (fast & robust for MEP runs)
+        const steps = 10;
+        let minD = Infinity;
+        let bestPt = { x: (a1.x + b1.x) / 2, y: (a1.y + b1.y) / 2, z: (a1.z + b1.z) / 2 };
+        for (let i = 0; i <= steps; i++) {
+          const ti = i / steps;
+          const pa = {
+            x: a1.x + (a2.x - a1.x) * ti,
+            y: a1.y + (a2.y - a1.y) * ti,
+            z: a1.z + (a2.z - a1.z) * ti,
+          };
+          for (let j = 0; j <= steps; j++) {
+            const tj = j / steps;
+            const pb = {
+              x: b1.x + (b2.x - b1.x) * tj,
+              y: b1.y + (b2.y - b1.y) * tj,
+              z: b1.z + (b2.z - b1.z) * tj,
+            };
+            const d = Math.hypot(pa.x - pb.x, pa.y - pb.y, pa.z - pb.z);
+            if (d < minD) {
+              minD = d;
+              bestPt = { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2, z: (pa.z + pb.z) / 2 };
+            }
+          }
+        }
+        return { dist: minD, point: bestPt };
+      }
+
+      // =========================================================================
+      // 6. HVAC ENGINEERING & PLUMBING CALCULATION ENGINE
+      // =========================================================================
+      function calcFrictionRate(cfm, eqDiaIn) {
+        // ASHRAE Darcy-Weisbach approximation for galvanized steel ducts (InWg per 100 ft)
+        if (cfm <= 0 || eqDiaIn <= 0) return 0;
+        return 0.109136 * Math.pow(cfm, 1.9) / Math.pow(eqDiaIn, 5.02);
+      }
+
+      function huebscherEqDia(wIn, hIn) {
+        // Huebscher's rectangular equivalent diameter formula
+        return 1.3 * Math.pow(wIn * hIn, 0.625) / Math.pow(wIn + hIn, 0.25);
+      }
+
+      function evaluateDuctSize(cfm, effectiveShape, rectTargetH) {
+        const maxV = Math.max(100, state.maxVelocity || 800);
+        if (cfm <= 0) {
+          if (effectiveShape === 'rect') {
+            const h = rectTargetH === 'auto' ? 6 : Number(rectTargetH);
+            return {
+              shape: 'rect',
+              sizeLabel: `6"×${h}"`,
+              wIn: 6,
+              hIn: h,
+              eqDiaIn: huebscherEqDia(6, h),
+              velocity: 0,
+              frictionPer100: 0,
+            };
+          }
+          return {
+            shape: 'round',
+            sizeLabel: '4" Ø',
+            diaIn: 4,
+            eqDiaIn: 4,
+            velocity: 0,
+            frictionPer100: 0,
+          };
+        }
+
+        const reqAreaSqFt = cfm / maxV;
+
+        if (effectiveShape === 'rect') {
+          let chosenW = 60, chosenH = 36;
+          if (rectTargetH && rectTargetH !== 'auto') {
+            const h = Number(rectTargetH);
+            const minW = Math.ceil(((reqAreaSqFt * 144) / h) / 2) * 2;
+            chosenW = Math.max(6, Math.min(72, minW));
+            chosenH = h;
+          } else {
+            let matched = false;
+            for (const [w, h] of STANDARD_RECT_IN) {
+              if ((w * h) / 144 >= reqAreaSqFt) {
+                chosenW = w;
+                chosenH = h;
+                matched = true;
+                break;
+              }
+            }
+            if (!matched) {
+              chosenW = 60;
+              chosenH = 36;
+            }
+          }
+          const areaSqFt = (chosenW * chosenH) / 144;
+          const velocity = cfm / areaSqFt;
+          const eqDiaIn = huebscherEqDia(chosenW, chosenH);
+          const frictionPer100 = calcFrictionRate(cfm, eqDiaIn);
+          return {
+            shape: 'rect',
+            sizeLabel: `${chosenW}"×${chosenH}"`,
+            wIn: chosenW,
+            hIn: chosenH,
+            eqDiaIn,
+            velocity,
+            frictionPer100,
+          };
+        }
+
+        // Round duct sizing (standard even diameters)
+        let chosenDia = STANDARD_ROUND_IN[STANDARD_ROUND_IN.length - 1];
+        for (const d of STANDARD_ROUND_IN) {
+          const areaSqFt = (Math.PI * Math.pow(d / 2, 2)) / 144;
+          if (areaSqFt >= reqAreaSqFt) {
+            chosenDia = d;
+            break;
+          }
+        }
+        const areaSqFt = (Math.PI * Math.pow(chosenDia / 2, 2)) / 144;
+        const velocity = cfm / areaSqFt;
+        const frictionPer100 = calcFrictionRate(cfm, chosenDia);
+        return {
+          shape: 'round',
+          sizeLabel: `${chosenDia}" Ø`,
+          diaIn: chosenDia,
+          eqDiaIn: chosenDia,
+          velocity,
+          frictionPer100,
+        };
+      }
+
+      function computeDuctNetwork(type) {
+        const ductsOfType = state.ducts.filter((d) => d.type === type);
+        const results = {};
+        if (ductsOfType.length === 0) return results;
+
+        const ahuCenter = state.ahu ? { x: state.ahu.x, y: state.ahu.y } : null;
+        const SNAP_TOL = 1.6;
+
+        // 1. Identify which ducts connect directly to AHU or to another duct (tree hierarchy)
+        const parentMap = {};
+        const depthMap = {};
+        const directRoomCfm = {};
+
+        for (const d of ductsOfType) {
+          directRoomCfm[d.id] = 0;
+          const pStart = d.points[0];
+          const pEnd = d.points[d.points.length - 1];
+
+          // Check room pickup at either endpoint (prefer endpoint farther from AHU if AHU exists)
+          let pickupRooms = new Set();
+          for (const room of state.rooms) {
+            if (pointInRoom(pStart, room) || pointInRoom(pEnd, room)) {
+              pickupRooms.add(room.id);
+            }
+          }
+          // If both endpoints are in different rooms, don't double count if one end is in the AHU room
+          if (pickupRooms.size > 1 && ahuCenter) {
+            const startDist = dist(pStart, ahuCenter);
+            const endDist = dist(pEnd, ahuCenter);
+            const farPt = startDist >= endDist ? pStart : pEnd;
+            pickupRooms = new Set();
+            for (const room of state.rooms) {
+              if (pointInRoom(farPt, room)) pickupRooms.add(room.id);
+            }
+          }
+
+          for (const rid of pickupRooms) {
+            const rr = state.computed.roomResults[rid];
+            if (rr) {
+              directRoomCfm[d.id] += type === 'exhaust' ? rr.exhaustCfm : rr.returnCfm;
+            }
+          }
+        }
+
+        // Determine AHU-connected trunks (roots)
+        const queue = [];
+        for (const d of ductsOfType) {
+          if (!ahuCenter) continue;
+          const pStart = d.points[0];
+          const pEnd = d.points[d.points.length - 1];
+          const nearAhu = dist(pStart, ahuCenter) <= Math.max(state.ahu.w, state.ahu.h) * 0.8 + SNAP_TOL ||
+                          dist(pEnd, ahuCenter) <= Math.max(state.ahu.w, state.ahu.h) * 0.8 + SNAP_TOL;
+          if (nearAhu) {
+            depthMap[d.id] = 0;
+            queue.push(d.id);
+          }
+        }
+
+        // BFS outward from AHU trunks to attach branch ducts that tee into them
+        let head = 0;
+        while (head < queue.length) {
+          const currId = queue[head++];
+          const curr = ductsOfType.find((x) => x.id === currId);
+          for (const cand of ductsOfType) {
+            if (depthMap[cand.id] !== undefined) continue;
+            const cStart = cand.points[0];
+            const cEnd = cand.points[cand.points.length - 1];
+            let touches = false;
+            for (let i = 1; i < curr.points.length; i++) {
+              if (distToSegment(cStart, curr.points[i - 1], curr.points[i]) <= SNAP_TOL ||
+                  distToSegment(cEnd, curr.points[i - 1], curr.points[i]) <= SNAP_TOL) {
+                touches = true;
+                break;
+              }
+            }
+            if (touches) {
+              parentMap[cand.id] = currId;
+              depthMap[cand.id] = depthMap[currId] + 1;
+              queue.push(cand.id);
+            }
+          }
+        }
+
+        // Accumulate CFM from deepest branches back to AHU trunks
+        const totalCfm = {};
+        for (const d of ductsOfType) totalCfm[d.id] = directRoomCfm[d.id];
+
+        const sortedByDepthDesc = [...ductsOfType]
+          .filter((d) => depthMap[d.id] !== undefined)
+          .sort((a, b) => depthMap[b.id] - depthMap[a.id]);
+
+        for (const d of sortedByDepthDesc) {
+          const pid = parentMap[d.id];
+          if (pid && totalCfm[pid] !== undefined) {
+            totalCfm[pid] += totalCfm[d.id];
+          }
+        }
+
+        // Size each duct segment
+        for (const d of ductsOfType) {
+          const cfm = totalCfm[d.id] || 0;
+          const lengthFt = polylineLength(d.points);
+          const elbows = countElbows(d.points);
+          const effShape = d.shapeOverride && d.shapeOverride !== 'global' ? d.shapeOverride : state.ductShape;
+          const rectH = d.rectHeightOverride && d.rectHeightOverride !== 'global' ? d.rectHeightOverride : state.rectMaxHeight;
+          const sizing = evaluateDuctSize(cfm, effShape, rectH);
+          const eqLenFt = lengthFt + elbows * ELBOW_EQ_LEN_FT;
+          const segLoss = (sizing.frictionPer100 * eqLenFt) / 100;
+
+          results[d.id] = {
+            cfm,
+            lengthFt,
+            elbows,
+            eqLenFt,
+            segLoss,
+            pathLoss: segLoss,
+            connectedToAhu: depthMap[d.id] !== undefined,
+            ...sizing,
+          };
+        }
+
+        // Accumulate cumulative path static pressure loss from AHU outward to each branch
+        const sortedByDepthAsc = [...ductsOfType]
+          .filter((d) => depthMap[d.id] !== undefined)
+          .sort((a, b) => depthMap[a.id] - depthMap[b.id]);
+
+        for (const d of sortedByDepthAsc) {
+          const pid = parentMap[d.id];
+          if (pid && results[pid]) {
+            results[d.id].pathLoss = results[pid].pathLoss + results[d.id].segLoss;
+          }
+        }
+
+        // Flag velocity or static loss warnings
+        for (const d of ductsOfType) {
+          const r = results[d.id];
+          r.velWarning = r.velocity > state.maxVelocity + 0.5;
+          r.staticWarning = r.pathLoss > state.maxStaticLoss + 0.0005;
+          r.hasWarning = r.velWarning || r.staticWarning;
+        }
+
+        return results;
+      }
+
+      function computePlumbing() {
+        const pipeResults = {};
+        let totalFt = 0;
+        for (const p of state.pipes) {
+          const lengthFt = polylineLength(p.points);
+          const elbows = countElbows(p.points);
+          const slope = p.slopeInPerFt || 0;
+          const dropFt = (slope * lengthFt) / 12;
+          const startZ = p.z ?? PIPE_COLORS[p.type].defaultZ;
+          const endZ = Math.max(0.2, startZ - dropFt);
+          totalFt += lengthFt;
+          pipeResults[p.id] = {
+            lengthFt,
+            elbows,
+            startZ,
+            endZ,
+            dropFt,
+            dropIn: dropFt * 12,
+          };
+        }
+        return { pipeResults, totalFt };
+      }
+
+      function detect3DClashes() {
+        const clashes = [];
+        for (const d of state.ducts) {
+          const dr = state.computed.ductResults[d.id];
+          if (!dr) continue;
+          const dz = d.z ?? DUCT_COLORS[d.type].defaultZ;
+          const ductHalfH = ((dr.shape === 'rect' ? dr.hIn : dr.diaIn) / 12) / 2;
+
+          for (const p of state.pipes) {
+            const pr = state.computed.pipeResults[p.id];
+            if (!pr) continue;
+            const pipeR = ((p.diameterIn || 1) / 12) / 2;
+            const minClearance = ductHalfH + pipeR + 0.15; // 1.8" buffer
+
+            // Check segment pairs
+            let pipeAccLen = 0;
+            const totalPipeLen = Math.max(0.01, pr.lengthFt);
+            let clashFound = false;
+
+            for (let pi = 1; pi < p.points.length && !clashFound; pi++) {
+              const p1 = p.points[pi - 1];
+              const p2 = p.points[pi];
+              const segLen = dist(p1, p2);
+              const z1 = pr.startZ - (pr.dropFt * (pipeAccLen / totalPipeLen));
+              const z2 = pr.startZ - (pr.dropFt * ((pipeAccLen + segLen) / totalPipeLen));
+              pipeAccLen += segLen;
+
+              for (let di = 1; di < d.points.length && !clashFound; di++) {
+                const d1 = d.points[di - 1];
+                const d2 = d.points[di];
+                const res = dist3DSegmentToSegment(
+                  { x: d1.x, y: d1.y, z: dz },
+                  { x: d2.x, y: d2.y, z: dz },
+                  { x: p1.x, y: p1.y, z: z1 },
+                  { x: p2.x, y: p2.y, z: z2 }
+                );
+                if (res.dist < minClearance) {
+                  clashes.push({
+                    ductId: d.id,
+                    pipeId: p.id,
+                    point: res.point,
+                  });
+                  clashFound = true;
+                }
+              }
+            }
+          }
+        }
+        return clashes;
+      }
+
       function recalculateSystem(opts = {}) {
         try {
-// ... existing code ... -->
+          const roomResults = {};
+          let totalExhaust = 0;
+          const returnFrac = Math.max(0, Math.min(100, state.returnRatioPct)) / 100;
+
+          for (const room of state.rooms) {
+            const area = getRoomArea(room);
+            const volume = area * room.height;
+            const exhaustCfm = (volume * room.ach) / 60;
+            const returnCfm = exhaustCfm * returnFrac;
+            roomResults[room.id] = { area, volume, exhaustCfm, returnCfm };
+            totalExhaust += exhaustCfm;
+          }
+
+          state.computed.roomResults = roomResults;
+          state.computed.totalExhaustCfm = totalExhaust;
+          state.computed.totalReturnCfm = totalExhaust * returnFrac;
+          state.computed.totalFreshCfm = totalExhaust * (1 - returnFrac);
+
+          const exhaustResults = computeDuctNetwork('exhaust');
+          const returnResults = computeDuctNetwork('return');
+          state.computed.ductResults = { ...exhaustResults, ...returnResults };
+
+          const { pipeResults, totalFt } = computePlumbing();
+          state.computed.pipeResults = pipeResults;
+          state.computed.totalPlumbingFt = totalFt;
+
+          let peakVel = 0;
+          let maxStatic = 0;
+          let hasWarning = false;
+          for (const r of Object.values(state.computed.ductResults)) {
+            if (r.velocity > peakVel) peakVel = r.velocity;
+            if (r.pathLoss > maxStatic) maxStatic = r.pathLoss;
+            if (r.hasWarning) hasWarning = true;
+          }
+
+          state.computed.peakVel = peakVel;
+          state.computed.maxStatic = maxStatic;
+          state.computed.hasWarning = hasWarning;
+          state.computed.clashes = detect3DClashes();
+
           updateSummaryUI();
           updateScheduleUI();
           if (!opts.skipInspectorRebuild) {
@@ -601,7 +1186,104 @@
           showToast('Calculation error — check inputs');
         }
       }
-// ... existing code ... -->
+
+      // =========================================================================
+      // 7. 2D CAD CANVAS RENDERING
+      // =========================================================================
+      function resizeCanvas() {
+        const dpr = window.devicePixelRatio || 1;
+        const rect = container.getBoundingClientRect();
+        canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+        canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        if (threeRenderer && threeCamera) {
+          threeCamera.aspect = Math.max(1, rect.width) / Math.max(1, rect.height);
+          threeCamera.updateProjectionMatrix();
+          threeRenderer.setSize(rect.width, rect.height);
+        }
+      }
+
+      function drawGrid(w, h) {
+        ctx.fillStyle = '#0b1120';
+        ctx.fillRect(0, 0, w, h);
+
+        const stepPx = state.zoom;
+        if (stepPx < 4) return;
+
+        const startWorldX = Math.floor(-state.panX / state.zoom) - 1;
+        const endWorldX = Math.ceil((w - state.panX) / state.zoom) + 1;
+        const startWorldY = Math.floor(-state.panY / state.zoom) - 1;
+        const endWorldY = Math.ceil((h - state.panY) / state.zoom) + 1;
+
+        ctx.lineWidth = 1;
+        for (let wx = startWorldX; wx <= endWorldX; wx++) {
+          const sx = Math.round(wx * state.zoom + state.panX) + 0.5;
+          const isMajor = wx % 5 === 0;
+          ctx.strokeStyle = isMajor ? 'rgba(56, 189, 248, 0.14)' : 'rgba(51, 65, 85, 0.28)';
+          ctx.beginPath();
+          ctx.moveTo(sx, 0);
+          ctx.lineTo(sx, h);
+          ctx.stroke();
+        }
+        for (let wy = startWorldY; wy <= endWorldY; wy++) {
+          const sy = Math.round(wy * state.zoom + state.panY) + 0.5;
+          const isMajor = wy % 5 === 0;
+          ctx.strokeStyle = isMajor ? 'rgba(56, 189, 248, 0.14)' : 'rgba(51, 65, 85, 0.28)';
+          ctx.beginPath();
+          ctx.moveTo(0, sy);
+          ctx.lineTo(w, sy);
+          ctx.stroke();
+        }
+      }
+
+      function drawRooms() {
+        for (const room of state.rooms) {
+          const isSel = state.selected?.kind === 'room' && state.selected?.id === room.id;
+          const res = state.computed.roomResults[room.id];
+
+          ctx.save();
+          ctx.beginPath();
+          if (room.shape === 'rect') {
+            const p = worldToScreen(room.x, room.y);
+            ctx.rect(p.x, p.y, room.w * state.zoom, room.h * state.zoom);
+          } else if (room.shape === 'circle') {
+            const c = worldToScreen(room.cx, room.cy);
+            ctx.arc(c.x, c.y, room.r * state.zoom, 0, Math.PI * 2);
+          } else if (room.shape === 'poly' && room.points.length >= 3) {
+            const p0 = worldToScreen(room.points[0].x, room.points[0].y);
+            ctx.moveTo(p0.x, p0.y);
+            for (let i = 1; i < room.points.length; i++) {
+              const pi = worldToScreen(room.points[i].x, room.points[i].y);
+              ctx.lineTo(pi.x, pi.y);
+            }
+            ctx.closePath();
+          }
+
+          ctx.fillStyle = isSel ? 'rgba(56, 189, 248, 0.18)' : 'rgba(30, 41, 59, 0.62)';
+          ctx.fill();
+          ctx.lineWidth = isSel ? 2.5 : 1.75;
+          ctx.strokeStyle = isSel ? '#38bdf8' : '#64748b';
+          ctx.stroke();
+
+          // Center Label
+          const center = worldToScreen(getRoomCenter(room).x, getRoomCenter(room).y);
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = '#f8fafc';
+          ctx.font = '600 12px Inter, sans-serif';
+          ctx.fillText(room.name, center.x, center.y - 11);
+
+          if (res) {
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '500 10px "JetBrains Mono", monospace';
+            ctx.fillText(`${Math.round(res.area)} ft² • ${room.ach} ACH`, center.x, center.y + 3);
+            ctx.fillStyle = '#fdba74';
+            ctx.fillText(`EX ${Math.round(res.exhaustCfm)} | RT ${Math.round(res.returnCfm)} CFM`, center.x, center.y + 16);
+          }
+
+          // Edge Dimensions
+          ctx.fillStyle = isSel ? '#7dd3fc' : '#64748b';
+          ctx.font = '500 10px "JetBrains Mono", monospace';
           if (room.shape === 'rect') {
             const topMid = worldToScreen(room.x + room.w / 2, room.y);
             const leftMid = worldToScreen(room.x, room.y + room.h / 2);
@@ -615,7 +1297,29 @@
             const topMid = worldToScreen(room.cx, room.cy - room.r);
             ctx.fillText(`Ø ${formatFt(room.r * 2)} ft`, topMid.x, topMid.y - 9);
           }
-// ... existing code ... -->
+
+          // Selection Handles
+          if (isSel) {
+            const drawHandle = (wx, wy) => {
+              const s = worldToScreen(wx, wy);
+              ctx.fillStyle = '#fbbf24';
+              ctx.strokeStyle = '#0f172a';
+              ctx.lineWidth = 1.5;
+              ctx.beginPath();
+              ctx.arc(s.x, s.y, 5, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.stroke();
+            };
+            if (room.shape === 'rect') {
+              drawHandle(room.x, room.y);
+              drawHandle(room.x + room.w, room.y);
+              drawHandle(room.x + room.w, room.y + room.h);
+              drawHandle(room.x, room.y + room.h);
+            } else if (room.shape === 'circle') {
+              drawHandle(room.cx + room.r, room.cy);
+            } else if (room.shape === 'poly') {
+              for (const pt of room.points) drawHandle(pt.x, pt.y);
+            }
           }
           ctx.restore();
         }
@@ -650,7 +1354,218 @@
           ctx.restore();
         }
       }
-// ... existing code ... -->
+
+      function drawEquipment() {
+        if (!state.ahu) return;
+        const ahu = state.ahu;
+        const isSel = state.selected?.kind === 'ahu';
+        const c = worldToScreen(ahu.x, ahu.y);
+        const w = ahu.w * state.zoom;
+        const h = ahu.h * state.zoom;
+
+        ctx.save();
+        ctx.fillStyle = isSel ? 'rgba(99, 102, 241, 0.45)' : 'rgba(79, 70, 229, 0.30)';
+        ctx.strokeStyle = isSel ? '#a5b4fc' : '#818cf8';
+        ctx.lineWidth = isSel ? 2.5 : 2;
+        ctx.beginPath();
+        ctx.roundRect(c.x - w / 2, c.y - h / 2, w, h, 5);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#e0e7ff';
+        ctx.font = '700 11px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('AHU', c.x, c.y);
+        ctx.restore();
+      }
+
+      function drawDucts() {
+        for (const d of state.ducts) {
+          if (d.points.length < 2) continue;
+          const isSel = state.selected?.kind === 'duct' && state.selected?.id === d.id;
+          const res = state.computed.ductResults[d.id];
+          const meta = DUCT_COLORS[d.type];
+
+          ctx.save();
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+
+          // Selection glow
+          if (isSel) {
+            ctx.beginPath();
+            d.points.forEach((pt, idx) => {
+              const s = worldToScreen(pt.x, pt.y);
+              if (idx === 0) ctx.moveTo(s.x, s.y);
+              else ctx.lineTo(s.x, s.y);
+            });
+            ctx.strokeStyle = 'rgba(251, 191, 36, 0.45)';
+            ctx.lineWidth = 11;
+            ctx.stroke();
+          }
+
+          // Main duct centerline
+          ctx.beginPath();
+          d.points.forEach((pt, idx) => {
+            const s = worldToScreen(pt.x, pt.y);
+            if (idx === 0) ctx.moveTo(s.x, s.y);
+            else ctx.lineTo(s.x, s.y);
+          });
+          ctx.strokeStyle = res?.hasWarning ? '#ef4444' : meta.stroke;
+          ctx.lineWidth = Math.max(3, Math.min(8, (res?.eqDiaIn || 8) * 0.25));
+          ctx.stroke();
+
+          // Endpoints & Vertex Handles
+          if (isSel) {
+            for (const pt of d.points) {
+              const s = worldToScreen(pt.x, pt.y);
+              ctx.fillStyle = '#fbbf24';
+              ctx.strokeStyle = '#0f172a';
+              ctx.lineWidth = 1.5;
+              ctx.beginPath();
+              ctx.arc(s.x, s.y, 4.5, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.stroke();
+            }
+          } else {
+            const p0 = worldToScreen(d.points[0].x, d.points[0].y);
+            const pn = worldToScreen(d.points[d.points.length - 1].x, d.points[d.points.length - 1].y);
+            ctx.fillStyle = meta.stroke;
+            ctx.beginPath(); ctx.arc(p0.x, p0.y, 3.5, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(pn.x, pn.y, 3.5, 0, Math.PI * 2); ctx.fill();
+          }
+
+          // Midpoint Label Pill: Size • CFM • Velocity
+          if (res) {
+            const midIdx = Math.floor(d.points.length / 2);
+            const a = d.points[midIdx - 1];
+            const b = d.points[midIdx];
+            const mid = worldToScreen((a.x + b.x) / 2, (a.y + b.y) / 2);
+            const label = `${res.sizeLabel} • ${Math.round(res.cfm)} CFM • ${Math.round(res.velocity)} FPM`;
+            ctx.font = '600 10px "JetBrains Mono", monospace';
+            const tw = ctx.measureText(label).width + 10;
+            ctx.fillStyle = res.hasWarning ? 'rgba(127, 29, 29, 0.92)' : 'rgba(15, 23, 42, 0.90)';
+            ctx.strokeStyle = res.hasWarning ? '#f87171' : meta.stroke;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.roundRect(mid.x - tw / 2, mid.y - 10, tw, 18, 4);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = res.hasWarning ? '#fecaca' : '#f1f5f9';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, mid.x, mid.y - 1);
+          }
+          ctx.restore();
+        }
+      }
+
+      function drawPipes() {
+        for (const p of state.pipes) {
+          if (p.points.length < 2) continue;
+          const isSel = state.selected?.kind === 'pipe' && state.selected?.id === p.id;
+          const meta = PIPE_COLORS[p.type];
+
+          ctx.save();
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+
+          if (isSel) {
+            ctx.beginPath();
+            p.points.forEach((pt, idx) => {
+              const s = worldToScreen(pt.x, pt.y);
+              if (idx === 0) ctx.moveTo(s.x, s.y);
+              else ctx.lineTo(s.x, s.y);
+            });
+            ctx.strokeStyle = 'rgba(251, 191, 36, 0.45)';
+            ctx.lineWidth = 9;
+            ctx.stroke();
+          }
+
+          ctx.beginPath();
+          p.points.forEach((pt, idx) => {
+            const s = worldToScreen(pt.x, pt.y);
+            if (idx === 0) ctx.moveTo(s.x, s.y);
+            else ctx.lineTo(s.x, s.y);
+          });
+          ctx.strokeStyle = meta.stroke;
+          ctx.lineWidth = p.type === 'drain' ? 3.5 : 2.5;
+          if (p.type === 'drain') ctx.setLineDash([7, 4]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          if (isSel) {
+            for (const pt of p.points) {
+              const s = worldToScreen(pt.x, pt.y);
+              ctx.fillStyle = '#fbbf24';
+              ctx.strokeStyle = '#0f172a';
+              ctx.lineWidth = 1.5;
+              ctx.beginPath();
+              ctx.arc(s.x, s.y, 4.5, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.stroke();
+            }
+          }
+
+          // Label Pill
+          const midIdx = Math.floor(p.points.length / 2);
+          const a = p.points[midIdx - 1];
+          const b = p.points[midIdx];
+          const mid = worldToScreen((a.x + b.x) / 2, (a.y + b.y) / 2);
+          const label = `${meta.prefix} ${formatPipeDia(p.diameterIn)} • Z=${(p.z ?? meta.defaultZ).toFixed(1)}'`;
+          ctx.font = '600 9.5px "JetBrains Mono", monospace';
+          const tw = ctx.measureText(label).width + 8;
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+          ctx.strokeStyle = meta.stroke;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.roundRect(mid.x - tw / 2, mid.y + 6, tw, 16, 4);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = '#e2e8f0';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(label, mid.x, mid.y + 14);
+          ctx.restore();
+        }
+      }
+
+      function drawClashes2D() {
+        for (const cl of state.computed.clashes) {
+          const s = worldToScreen(cl.point.x, cl.point.y);
+          ctx.save();
+          ctx.strokeStyle = '#f59e0b';
+          ctx.fillStyle = 'rgba(245, 158, 11, 0.25)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, 9, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = '#fef3c7';
+          ctx.font = '700 10px Inter, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('!', s.x, s.y);
+          ctx.restore();
+        }
+      }
+
+      function drawDrafts() {
+        if (state.draftRect) {
+          const r = state.draftRect;
+          const x = Math.min(r.x1, r.x2), y = Math.min(r.y1, r.y2);
+          const w = Math.abs(r.x2 - r.x1), h = Math.abs(r.y2 - r.y1);
+          const p = worldToScreen(x, y);
+          ctx.save();
+          ctx.setLineDash([5, 4]);
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.14)';
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 2;
+          ctx.fillRect(p.x, p.y, w * state.zoom, h * state.zoom);
+          ctx.strokeRect(p.x, p.y, w * state.zoom, h * state.zoom);
+          ctx.setLineDash([]);
+
           ctx.fillStyle = '#e0f2fe';
           ctx.font = '600 11px "JetBrains Mono", monospace';
           ctx.textAlign = 'center';
@@ -686,12 +1601,495 @@
           );
           ctx.restore();
         }
-// ... existing code ... -->
+
+        if (state.draftPoly.length > 0) {
+          const pts = state.draftPoly;
+          const nextPt = getConstrainedPoint(state.mouseWorld, pts[pts.length - 1], false);
+          ctx.save();
+          ctx.beginPath();
+          pts.forEach((pt, i) => {
+            const s = worldToScreen(pt.x, pt.y);
+            if (i === 0) ctx.moveTo(s.x, s.y);
+            else ctx.lineTo(s.x, s.y);
+          });
+          const sn = worldToScreen(nextPt.x, nextPt.y);
+          ctx.lineTo(sn.x, sn.y);
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 4]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // Green start vertex indicator
+          const s0 = worldToScreen(pts[0].x, pts[0].y);
+          ctx.fillStyle = '#10b981';
+          ctx.beginPath();
+          ctx.arc(s0.x, s0.y, 5.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        const activeRun = state.draftDuct || state.draftPipe;
+        if (activeRun && activeRun.points.length > 0) {
+          const pts = activeRun.points;
+          const isDuct = Boolean(state.draftDuct);
+          const color = isDuct ? DUCT_COLORS[activeRun.type].stroke : PIPE_COLORS[activeRun.type].stroke;
+          const nextPt = getConstrainedPoint(state.mouseWorld, pts[pts.length - 1], isDuct, activeRun.type);
+
+          ctx.save();
+          ctx.beginPath();
+          pts.forEach((pt, i) => {
+            const s = worldToScreen(pt.x, pt.y);
+            if (i === 0) ctx.moveTo(s.x, s.y);
+            else ctx.lineTo(s.x, s.y);
+          });
+          const sn = worldToScreen(nextPt.x, nextPt.y);
+          ctx.lineTo(sn.x, sn.y);
+          ctx.strokeStyle = color;
+          ctx.lineWidth = isDuct ? 4 : 3;
+          ctx.setLineDash([6, 4]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          const segLen = dist(pts[pts.length - 1], nextPt);
+          const lastS = worldToScreen(pts[pts.length - 1].x, pts[pts.length - 1].y);
+          ctx.fillStyle = '#f8fafc';
+          ctx.font = '600 10px "JetBrains Mono", monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText(`${formatFt(segLen)} ft`, (lastS.x + sn.x) / 2, (lastS.y + sn.y) / 2 - 10);
+          ctx.restore();
+        }
+      }
+
+      function render() {
+        if (state.viewMode !== '2d') return;
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+        if (!w || !h) return;
+        drawGrid(w, h);
+        drawRooms();
+        drawEquipment();
+        drawDucts();
+        drawPipes();
+        drawClashes2D();
+        drawDrafts();
+      }
+
+      // =========================================================================
+      // 8. 3D MEP ENGINE (THREE.JS)
+      // =========================================================================
+      let threeScene = null;
+      let threeCamera = null;
+      let threeRenderer = null;
+      let threeGroup = null;
+      let threeAnimId = null;
+      let threePickables = [];
+
+      const cam3D = {
+        theta: Math.PI / 4,
+        phi: Math.PI / 3.2,
+        radius: 52,
+        target: { x: 18, y: 4, z: 12 },
+        dragging: false,
+        mode: 'orbit',
+        lastX: 0,
+        lastY: 0,
+        moved: false,
+      };
+
+      function update3DCameraPosition() {
+        if (!threeCamera) return;
+        const sinPhi = Math.sin(cam3D.phi);
+        threeCamera.position.set(
+          cam3D.target.x + cam3D.radius * sinPhi * Math.cos(cam3D.theta),
+          cam3D.target.y + cam3D.radius * Math.cos(cam3D.phi),
+          cam3D.target.z + cam3D.radius * sinPhi * Math.sin(cam3D.theta)
+        );
+        threeCamera.lookAt(cam3D.target.x, cam3D.target.y, cam3D.target.z);
+      }
+
+      function init3D() {
+        if (threeRenderer || typeof THREE === 'undefined') return;
+        const rect = container.getBoundingClientRect();
+        threeScene = new THREE.Scene();
+        threeScene.background = new THREE.Color(0x070c18);
+
+        threeCamera = new THREE.PerspectiveCamera(45, Math.max(1, rect.width) / Math.max(1, rect.height), 0.1, 600);
+        threeRenderer = new THREE.WebGLRenderer({ antialias: true });
+        threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        threeRenderer.setSize(rect.width, rect.height);
+        view3DContainer.appendChild(threeRenderer.domElement);
+
+        // Lighting
+        threeScene.add(new THREE.AmbientLight(0xcbd5e1, 0.72));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+        dirLight.position.set(40, 70, 35);
+        threeScene.add(dirLight);
+        const fillLight = new THREE.DirectionalLight(0x38bdf8, 0.35);
+        fillLight.position.set(-35, 30, -25);
+        threeScene.add(fillLight);
+
+        // Floor Grid
+        const grid = new THREE.GridHelper(120, 60, 0x1e3a5f, 0x111d32);
+        grid.position.set(20, -0.02, 14);
+        threeScene.add(grid);
+
+        threeGroup = new THREE.Group();
+        threeScene.add(threeGroup);
+
+        // Pointer Controls for Orbit / Pan / Raycast Pick
+        const dom = threeRenderer.domElement;
+        dom.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        dom.addEventListener('pointerdown', (e) => {
+          cam3D.dragging = true;
+          cam3D.moved = false;
+          cam3D.mode = (e.button === 2 || e.shiftKey) ? 'pan' : 'orbit';
+          cam3D.lastX = e.clientX;
+          cam3D.lastY = e.clientY;
+        });
+
+        window.addEventListener('pointermove', (e) => {
+          if (!cam3D.dragging || state.viewMode !== '3d') return;
+          const dx = e.clientX - cam3D.lastX;
+          const dy = e.clientY - cam3D.lastY;
+          if (Math.abs(dx) + Math.abs(dy) > 2) cam3D.moved = true;
+          cam3D.lastX = e.clientX;
+          cam3D.lastY = e.clientY;
+
+          if (cam3D.mode === 'orbit') {
+            cam3D.theta -= dx * 0.007;
+            cam3D.phi = Math.max(0.12, Math.min(Math.PI / 2 - 0.04, cam3D.phi - dy * 0.007));
+          } else {
+            const panScale = cam3D.radius * 0.0014;
+            const rightX = -Math.sin(cam3D.theta);
+            const rightZ = Math.cos(cam3D.theta);
+            const fwdX = -Math.cos(cam3D.theta);
+            const fwdZ = -Math.sin(cam3D.theta);
+            cam3D.target.x += (-dx * rightX + dy * fwdX) * panScale;
+            cam3D.target.z += (-dx * rightZ + dy * fwdZ) * panScale;
+          }
+          update3DCameraPosition();
+        });
+
+        window.addEventListener('pointerup', (e) => {
+          if (!cam3D.dragging) return;
+          cam3D.dragging = false;
+          if (!cam3D.moved && state.viewMode === '3d') {
+            pick3DObject(e);
+          }
+        });
+
+        dom.addEventListener('wheel', (e) => {
+          e.preventDefault();
+          cam3D.radius = Math.max(8, Math.min(180, cam3D.radius * (e.deltaY > 0 ? 1.08 : 0.92)));
+          update3DCameraPosition();
+        }, { passive: false });
+
+        update3DCameraPosition();
+      }
+
+      function pick3DObject(e) {
+        if (!threeRenderer || !threeCamera || threePickables.length === 0) return;
+        const rect = threeRenderer.domElement.getBoundingClientRect();
+        const mouse = new THREE.Vector2(
+          ((e.clientX - rect.left) / rect.width) * 2 - 1,
+          -((e.clientY - rect.top) / rect.height) * 2 + 1
+        );
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(mouse, threeCamera);
+        const hits = raycaster.intersectObjects(threePickables, false);
+        if (hits.length > 0 && hits[0].object.userData?.selectMeta) {
+          state.selected = hits[0].object.userData.selectMeta;
+          updateInspectorUI();
+          rebuild3DScene();
+        }
+      }
+
+      function add3DSegmentMesh(p1, p2, shape, wFt, hFt, colorHex, isSelected, meta) {
+        const v1 = new THREE.Vector3(p1.x, p1.z, p1.y);
+        const v2 = new THREE.Vector3(p2.x, p2.z, p2.y);
+        const dir = new THREE.Vector3().subVectors(v2, v1);
+        const len = dir.length();
+        if (len < 0.02) return;
+
+        const mat = new THREE.MeshStandardMaterial({
+          color: colorHex,
+          roughness: 0.42,
+          metalness: 0.35,
+          emissive: isSelected ? 0x6b4f00 : 0x000000,
+          emissiveIntensity: isSelected ? 0.65 : 0,
+        });
+
+        let geom;
+        if (shape === 'rect') {
+          geom = new THREE.BoxGeometry(wFt, hFt, len);
+        } else {
+          geom = new THREE.CylinderGeometry(wFt / 2, wFt / 2, len, 14);
+          geom.rotateX(Math.PI / 2);
+        }
+
+        const mesh = new THREE.Mesh(geom, mat);
+        mesh.position.copy(v1).addScaledVector(dir, 0.5);
+        mesh.lookAt(v2);
+        mesh.userData.selectMeta = meta;
+        threeGroup.add(mesh);
+        threePickables.push(mesh);
+
+        // Joint sphere at start point for smooth elbows
+        const jointGeom = new THREE.SphereGeometry(Math.max(wFt, hFt) * 0.52, 10, 10);
+        const jointMesh = new THREE.Mesh(jointGeom, mat);
+        jointMesh.position.copy(v1);
+        threeGroup.add(jointMesh);
+      }
+
+      function rebuild3DScene() {
+        if (!threeGroup) return;
+        while (threeGroup.children.length > 0) {
+          const obj = threeGroup.children[0];
+          if (obj.geometry) obj.geometry.dispose();
+          if (obj.material) {
+            if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose());
+            else obj.material.dispose();
+          }
+          threeGroup.remove(obj);
+        }
+        threePickables = [];
+
+        // 1. Rooms (Floor + Walls)
+        for (const room of state.rooms) {
+          const isSel = state.selected?.kind === 'room' && state.selected?.id === room.id;
+          const wallOpacity = state.show3DWalls === 'solid' ? 0.85 : state.show3DWalls === 'xray' ? 0.18 : 0.0;
+          const wallColor = isSel ? 0x38bdf8 : 0x475569;
+          const floorMat = new THREE.MeshStandardMaterial({
+            color: isSel ? 0x1e3a5f : 0x162236,
+            roughness: 0.9,
+            side: THREE.DoubleSide,
+          });
+          const wallMat = new THREE.MeshStandardMaterial({
+            color: wallColor,
+            transparent: wallOpacity < 1,
+            opacity: wallOpacity,
+            roughness: 0.7,
+            side: THREE.DoubleSide,
+            depthWrite: wallOpacity >= 0.8,
+          });
+
+          if (room.shape === 'rect') {
+            const floor = new THREE.Mesh(new THREE.PlaneGeometry(room.w, room.h), floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.set(room.x + room.w / 2, 0.01, room.y + room.h / 2);
+            floor.userData.selectMeta = { kind: 'room', id: room.id };
+            threeGroup.add(floor);
+            threePickables.push(floor);
+
+            const boxGeom = new THREE.BoxGeometry(room.w, room.height, room.h);
+            if (wallOpacity > 0) {
+              const wallMesh = new THREE.Mesh(boxGeom, wallMat);
+              wallMesh.position.set(room.x + room.w / 2, room.height / 2, room.y + room.h / 2);
+              threeGroup.add(wallMesh);
+            }
+            const edges = new THREE.LineSegments(
+              new THREE.EdgesGeometry(boxGeom),
+              new THREE.LineBasicMaterial({ color: isSel ? 0x38bdf8 : 0x64748b, transparent: true, opacity: 0.65 })
+            );
+            edges.position.set(room.x + room.w / 2, room.height / 2, room.y + room.h / 2);
+            threeGroup.add(edges);
+          } else if (room.shape === 'circle') {
+            const floor = new THREE.Mesh(new THREE.CircleGeometry(room.r, 32), floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.set(room.cx, 0.01, room.cy);
+            floor.userData.selectMeta = { kind: 'room', id: room.id };
+            threeGroup.add(floor);
+            threePickables.push(floor);
+
+            const cylGeom = new THREE.CylinderGeometry(room.r, room.r, room.height, 32, 1, true);
+            if (wallOpacity > 0) {
+              const wallMesh = new THREE.Mesh(cylGeom, wallMat);
+              wallMesh.position.set(room.cx, room.height / 2, room.cy);
+              threeGroup.add(wallMesh);
+            }
+            const edges = new THREE.LineSegments(
+              new THREE.EdgesGeometry(cylGeom),
+              new THREE.LineBasicMaterial({ color: isSel ? 0x38bdf8 : 0x64748b, transparent: true, opacity: 0.65 })
+            );
+            edges.position.set(room.cx, room.height / 2, room.cy);
+            threeGroup.add(edges);
+          } else if (room.shape === 'poly' && room.points.length >= 3) {
+            const shape2D = new THREE.Shape();
+            room.points.forEach((pt, idx) => {
+              if (idx === 0) shape2D.moveTo(pt.x, -pt.y);
+              else shape2D.lineTo(pt.x, -pt.y);
+            });
+            shape2D.closePath();
+
+            const floorGeom = new THREE.ShapeGeometry(shape2D);
+            const floor = new THREE.Mesh(floorGeom, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.y = 0.01;
+            floor.userData.selectMeta = { kind: 'room', id: room.id };
+            threeGroup.add(floor);
+            threePickables.push(floor);
+
+            const extrudeGeom = new THREE.ExtrudeGeometry(shape2D, { depth: room.height, bevelEnabled: false });
+            extrudeGeom.rotateX(-Math.PI / 2);
+            if (wallOpacity > 0) {
+              const wallMesh = new THREE.Mesh(extrudeGeom, wallMat);
+              threeGroup.add(wallMesh);
+            }
+            const edges = new THREE.LineSegments(
+              new THREE.EdgesGeometry(extrudeGeom),
+              new THREE.LineBasicMaterial({ color: isSel ? 0x38bdf8 : 0x64748b, transparent: true, opacity: 0.65 })
+            );
+            threeGroup.add(edges);
+          }
+        }
+
+        // 2. AHU Equipment Box
+        if (state.ahu && state.show3DHvac) {
+          const isSel = state.selected?.kind === 'ahu';
+          const ahuH = 4.0;
+          const ahuMesh = new THREE.Mesh(
+            new THREE.BoxGeometry(state.ahu.w, ahuH, state.ahu.h),
+            new THREE.MeshStandardMaterial({
+              color: 0x6366f1,
+              roughness: 0.4,
+              metalness: 0.3,
+              emissive: isSel ? 0x312e81 : 0x000000,
+            })
+          );
+          ahuMesh.position.set(state.ahu.x, (state.ahu.z ?? 6.5), state.ahu.y);
+          ahuMesh.userData.selectMeta = { kind: 'ahu', id: state.ahu.id };
+          threeGroup.add(ahuMesh);
+          threePickables.push(ahuMesh);
+        }
+
+        // 3. HVAC Ducts
+        if (state.show3DHvac) {
+          for (const d of state.ducts) {
+            const res = state.computed.ductResults[d.id];
+            if (!res || d.points.length < 2) continue;
+            const isSel = state.selected?.kind === 'duct' && state.selected?.id === d.id;
+            const dz = d.z ?? DUCT_COLORS[d.type].defaultZ;
+            const colorHex = res.hasWarning ? 0xef4444 : DUCT_COLORS[d.type].hex3d;
+            const wFt = (res.shape === 'rect' ? res.wIn : res.diaIn) / 12;
+            const hFt = (res.shape === 'rect' ? res.hIn : res.diaIn) / 12;
+
+            for (let i = 1; i < d.points.length; i++) {
+              add3DSegmentMesh(
+                { x: d.points[i - 1].x, y: d.points[i - 1].y, z: dz },
+                { x: d.points[i].x, y: d.points[i].y, z: dz },
+                res.shape,
+                Math.max(0.25, wFt),
+                Math.max(0.25, hFt),
+                colorHex,
+                isSel,
+                { kind: 'duct', id: d.id }
+              );
+            }
+          }
+        }
+
+        // 4. Plumbing Pipes (with Z elevation & slope)
+        if (state.show3DPlumbing) {
+          for (const p of state.pipes) {
+            const pr = state.computed.pipeResults[p.id];
+            if (!pr || p.points.length < 2) continue;
+            const isSel = state.selected?.kind === 'pipe' && state.selected?.id === p.id;
+            const diaFt = Math.max(0.14, (p.diameterIn || 1) / 12);
+            const totalLen = Math.max(0.01, pr.lengthFt);
+            let accLen = 0;
+
+            for (let i = 1; i < p.points.length; i++) {
+              const p1 = p.points[i - 1];
+              const p2 = p.points[i];
+              const segLen = dist(p1, p2);
+              const z1 = pr.startZ - pr.dropFt * (accLen / totalLen);
+              const z2 = pr.startZ - pr.dropFt * ((accLen + segLen) / totalLen);
+              accLen += segLen;
+
+              add3DSegmentMesh(
+                { x: p1.x, y: p1.y, z: z1 },
+                { x: p2.x, y: p2.y, z: z2 },
+                'round',
+                diaFt,
+                diaFt,
+                PIPE_COLORS[p.type].hex3d,
+                isSel,
+                { kind: 'pipe', id: p.id }
+              );
+            }
+          }
+        }
+
+        // 5. 3D Clash Warning Spheres
+        for (const cl of state.computed.clashes) {
+          const sphere = new THREE.Mesh(
+            new THREE.SphereGeometry(0.65, 14, 14),
+            new THREE.MeshBasicMaterial({ color: 0xf59e0b, wireframe: true })
+          );
+          sphere.position.set(cl.point.x, cl.point.z, cl.point.y);
+          threeGroup.add(sphere);
+        }
+      }
+
+      function animate3D() {
+        if (state.viewMode !== '3d') return;
+        threeAnimId = requestAnimationFrame(animate3D);
+        if (threeRenderer && threeScene && threeCamera) {
+          threeRenderer.render(threeScene, threeCamera);
+        }
+      }
+
+      function set3DCameraPreset(preset) {
+        // Compute scene center
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        for (const r of state.rooms) {
+          const c = getRoomCenter(r);
+          minX = Math.min(minX, c.x - 10); maxX = Math.max(maxX, c.x + 10);
+          minY = Math.min(minY, c.y - 10); maxY = Math.max(maxY, c.y + 10);
+        }
+        if (isFinite(minX)) {
+          cam3D.target.x = (minX + maxX) / 2;
+          cam3D.target.z = (minY + maxY) / 2;
+          cam3D.target.y = 4;
+        }
+        if (preset === 'iso')   { cam3D.theta = Math.PI / 4; cam3D.phi = Math.PI / 3.2; cam3D.radius = 52; }
+        if (preset === 'top')   { cam3D.theta = Math.PI / 2; cam3D.phi = 0.14; cam3D.radius = 58; }
+        if (preset === 'front') { cam3D.theta = Math.PI / 2; cam3D.phi = Math.PI / 2.25; cam3D.radius = 48; }
+        if (preset === 'side')  { cam3D.theta = 0; cam3D.phi = Math.PI / 2.25; cam3D.radius = 48; }
+        update3DCameraPosition();
+      }
+
+      function setViewMode(mode) {
+        state.viewMode = mode;
         if (mode === '3d') {
           cancelDraft();
           quickRoomBar.classList.add('hidden');
           canvas.classList.add('hidden');
-// ... existing code ... -->
+          hud2DLeft.classList.add('hidden');
+          hud2DRight.classList.add('hidden');
+          view3DContainer.classList.remove('hidden');
+          hud3DControls.classList.remove('hidden');
+
+          btnView3D.className = 'px-3 py-1 rounded-md text-xs font-semibold transition bg-indigo-600 text-white shadow flex items-center gap-1.5';
+          btnView2D.className = 'px-3 py-1 rounded-md text-xs font-semibold transition text-slate-300 hover:text-white flex items-center gap-1.5';
+          toolHintText.textContent = '3D MEP View: Left-drag to orbit, Right/Shift-drag to pan, Scroll to zoom, Click any duct or pipe to edit Z elevation.';
+
+          init3D();
+          resizeCanvas();
+          rebuild3DScene();
+          set3DCameraPreset('iso');
+          cancelAnimationFrame(threeAnimId);
+          animate3D();
+        } else {
+          cancelAnimationFrame(threeAnimId);
+          view3DContainer.classList.add('hidden');
+          hud3DControls.classList.add('hidden');
+          canvas.classList.remove('hidden');
+          hud2DLeft.classList.remove('hidden');
+          hud2DRight.classList.remove('hidden');
+
           btnView2D.className = 'px-3 py-1 rounded-md text-xs font-semibold transition bg-indigo-600 text-white shadow flex items-center gap-1.5';
           btnView3D.className = 'px-3 py-1 rounded-md text-xs font-semibold transition text-slate-300 hover:text-white flex items-center gap-1.5';
           toolHintText.textContent = TOOL_HINTS[state.tool] || '';
@@ -701,19 +2099,425 @@
           render();
         }
       }
-// ... existing code ... -->
-      canvas.addEventListener('pointermove', (e) => {
+
+      // =========================================================================
+      // 9. 2D INTERACTION, SNAPPING & HIT TESTING
+      // =========================================================================
+      function getEventScreenPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      }
+
+      function getConstrainedPoint(rawWp, anchorPt, allowEntitySnap = false, runType = null) {
+        let pt = { x: snapVal(rawWp.x), y: snapVal(rawWp.y) };
+
+        if (state.orthoSnap && anchorPt) {
+          const dx = Math.abs(pt.x - anchorPt.x);
+          const dy = Math.abs(pt.y - anchorPt.y);
+          if (dx >= dy) pt.y = anchorPt.y;
+          else pt.x = anchorPt.x;
+        }
+
+        if (allowEntitySnap) {
+          const snapTol = 1.2;
+          // Snap to AHU center
+          if (state.ahu && dist(rawWp, state.ahu) <= snapTol + 0.5) {
+            return { x: state.ahu.x, y: state.ahu.y };
+          }
+          // Snap to same-type duct segments (for tees)
+          for (const d of state.ducts) {
+            if (runType && d.type !== runType) continue;
+            for (let i = 1; i < d.points.length; i++) {
+              const cp = closestPointOnSegment(rawWp, d.points[i - 1], d.points[i]);
+              if (dist(rawWp, cp) <= snapTol) return cp;
+            }
+          }
+          // Snap to room center
+          for (const r of state.rooms) {
+            const rc = getRoomCenter(r);
+            if (dist(rawWp, rc) <= snapTol) return rc;
+          }
+        }
+        return pt;
+      }
+
+      function hitTest(wp) {
+        const handleTol = 10 / state.zoom;
+        const lineTol = 9 / state.zoom;
+
+        // 1. Check handles of currently selected item first
+        if (state.selected?.kind === 'room') {
+          const room = state.rooms.find((r) => r.id === state.selected.id);
+          if (room) {
+            if (room.shape === 'rect') {
+              const corners = [
+                { x: room.x, y: room.y },
+                { x: room.x + room.w, y: room.y },
+                { x: room.x + room.w, y: room.y + room.h },
+                { x: room.x, y: room.y + room.h },
+              ];
+              for (let i = 0; i < 4; i++) {
+                if (dist(wp, corners[i]) <= handleTol) {
+                  return { kind: 'room_rect_handle', room, cornerIdx: i };
+                }
+              }
+            } else if (room.shape === 'circle') {
+              if (dist(wp, { x: room.cx + room.r, y: room.cy }) <= handleTol) {
+                return { kind: 'room_circle_handle', room };
+              }
+            } else if (room.shape === 'poly') {
+              for (let i = 0; i < room.points.length; i++) {
+                if (dist(wp, room.points[i]) <= handleTol) {
+                  return { kind: 'room_poly_handle', room, vtxIdx: i };
+                }
+              }
+            }
+          }
+        } else if (state.selected?.kind === 'duct') {
+          const duct = state.ducts.find((d) => d.id === state.selected.id);
+          if (duct) {
+            for (let i = 0; i < duct.points.length; i++) {
+              if (dist(wp, duct.points[i]) <= handleTol) {
+                return { kind: 'duct_vtx', duct, vtxIdx: i };
+              }
+            }
+          }
+        } else if (state.selected?.kind === 'pipe') {
+          const pipe = state.pipes.find((p) => p.id === state.selected.id);
+          if (pipe) {
+            for (let i = 0; i < pipe.points.length; i++) {
+              if (dist(wp, pipe.points[i]) <= handleTol) {
+                return { kind: 'pipe_vtx', pipe, vtxIdx: i };
+              }
+            }
+          }
+        }
+
+        // 2. Pipes
+        for (let i = state.pipes.length - 1; i >= 0; i--) {
+          const p = state.pipes[i];
+          for (let j = 1; j < p.points.length; j++) {
+            if (distToSegment(wp, p.points[j - 1], p.points[j]) <= lineTol) {
+              return { kind: 'pipe', id: p.id, pipe: p };
+            }
+          }
+        }
+
+        // 3. Ducts
+        for (let i = state.ducts.length - 1; i >= 0; i--) {
+          const d = state.ducts[i];
+          for (let j = 1; j < d.points.length; j++) {
+            if (distToSegment(wp, d.points[j - 1], d.points[j]) <= lineTol) {
+              return { kind: 'duct', id: d.id, duct: d };
+            }
+          }
+        }
+
+        // 4. AHU
+        if (state.ahu) {
+          const a = state.ahu;
+          if (Math.abs(wp.x - a.x) <= a.w / 2 && Math.abs(wp.y - a.y) <= a.h / 2) {
+            return { kind: 'ahu', id: a.id, ahu: a };
+          }
+        }
+
+        // 5. Rooms
+        for (let i = state.rooms.length - 1; i >= 0; i--) {
+          if (pointInRoom(wp, state.rooms[i])) {
+            return { kind: 'room', id: state.rooms[i].id, room: state.rooms[i] };
+          }
+        }
+
+        return null;
+      }
+
+      function finishActiveDraft() {
+        if (state.draftPoly.length >= 3) {
+          const ht = Math.max(4, parseFloat(document.getElementById('quickRoomHt').value) || 10);
+          const ach = Math.max(0.5, parseFloat(document.getElementById('quickRoomAch').value) || 6);
+          const newRoom = {
+            id: genId('room'),
+            name: `Room ${state.rooms.length + 1}`,
+            shape: 'poly',
+            points: state.draftPoly.map((p) => ({ ...p })),
+            height: ht,
+            ach,
+          };
+          state.rooms.push(newRoom);
+          state.selected = { kind: 'room', id: newRoom.id };
+          state.draftPoly = [];
+          drawingActions.classList.add('hidden');
+          showToast(`Created ${newRoom.name}`);
+          recalculateSystem();
+          return;
+        }
+
+        if (state.draftDuct && state.draftDuct.points.length >= 2) {
+          const type = state.draftDuct.type;
+          const prefix = type === 'exhaust' ? 'EX' : 'RT';
+          const count = state.ducts.filter((d) => d.type === type).length + 1;
+          const newDuct = {
+            id: genId('duct'),
+            name: `${prefix}-${count}`,
+            type,
+            points: state.draftDuct.points.map((p) => ({ ...p })),
+            shapeOverride: 'global',
+            rectHeightOverride: 'global',
+            z: DUCT_COLORS[type].defaultZ,
+          };
+          state.ducts.push(newDuct);
+          state.selected = { kind: 'duct', id: newDuct.id };
+          state.draftDuct = null;
+          drawingActions.classList.add('hidden');
+          showToast(`Added ${newDuct.name}`);
+          recalculateSystem();
+          return;
+        }
+
+        if (state.draftPipe && state.draftPipe.points.length >= 2) {
+          const type = state.draftPipe.type;
+          const meta = PIPE_COLORS[type];
+          const count = state.pipes.filter((p) => p.type === type).length + 1;
+          const newPipe = {
+            id: genId('pipe'),
+            name: `${meta.prefix}-${count}`,
+            type,
+            points: state.draftPipe.points.map((p) => ({ ...p })),
+            diameterIn: meta.defaultDia,
+            z: meta.defaultZ,
+            slopeInPerFt: meta.defaultSlope,
+          };
+          state.pipes.push(newPipe);
+          state.selected = { kind: 'pipe', id: newPipe.id };
+          state.draftPipe = null;
+          drawingActions.classList.add('hidden');
+          showToast(`Added ${newPipe.name}`);
+          recalculateSystem();
+          return;
+        }
+
+        cancelDraft();
+      }
+
+      function cancelDraft() {
+        state.draftRect = null;
+        state.draftCircle = null;
+        state.draftPoly = [];
+        state.draftDuct = null;
+        state.draftPipe = null;
+        drawingActions.classList.add('hidden');
+        render();
+      }
+
+      // Pointer Events on 2D Canvas
+      canvas.addEventListener('pointerdown', (e) => {
+        if (state.viewMode !== '2d') return;
         const sp = getEventScreenPos(e);
         const wp = screenToWorld(sp.x, sp.y);
         state.mouseWorld = wp;
-        hudX.textContent = state.snapMode === '0.1in' ? formatFtIn(snapVal(wp.x)) : wp.x.toFixed(1);
-        hudY.textContent = state.snapMode === '0.1in' ? formatFtIn(snapVal(wp.y)) : wp.y.toFixed(1);
-// ... existing code ... -->
+
+        // Middle mouse or Pan tool
+        if (e.button === 1 || state.tool === 'pan') {
+          state.isDragging = true;
+          state.dragMode = 'pan';
+          state.dragStartScreen = sp;
+          state.dragTargetMeta = { panX: state.panX, panY: state.panY };
+          canvas.style.cursor = 'grabbing';
+          return;
+        }
+
+        if (e.button !== 0) return;
+
+        // Select / Edit Tool
+        if (state.tool === 'select') {
+          const hit = hitTest(wp);
+          if (!hit) {
+            state.selected = null;
+            updateInspectorUI();
+            render();
+            return;
+          }
+
+          if (hit.kind === 'room_rect_handle') {
+            state.isDragging = true;
+            state.dragMode = 'resize_rect';
+            state.dragTargetMeta = hit;
+            return;
+          }
+          if (hit.kind === 'room_circle_handle') {
+            state.isDragging = true;
+            state.dragMode = 'resize_circle';
+            state.dragTargetMeta = hit;
+            return;
+          }
+          if (hit.kind === 'room_poly_handle') {
+            state.isDragging = true;
+            state.dragMode = 'move_poly_vtx';
+            state.dragTargetMeta = hit;
+            return;
+          }
+          if (hit.kind === 'duct_vtx') {
+            state.isDragging = true;
+            state.dragMode = 'move_duct_vtx';
+            state.dragTargetMeta = hit;
+            return;
+          }
+          if (hit.kind === 'pipe_vtx') {
+            state.isDragging = true;
+            state.dragMode = 'move_pipe_vtx';
+            state.dragTargetMeta = hit;
+            return;
+          }
+
+          state.selected = { kind: hit.kind, id: hit.id };
+          updateInspectorUI();
+          render();
+
+          if (hit.kind === 'room') {
+            state.isDragging = true;
+            state.dragMode = 'move_room';
+            state.dragStartWorld = wp;
+            state.dragTargetMeta = {
+              room: hit.room,
+              orig: hit.room.shape === 'rect'
+                ? { x: hit.room.x, y: hit.room.y }
+                : hit.room.shape === 'circle'
+                  ? { cx: hit.room.cx, cy: hit.room.cy }
+                  : { points: hit.room.points.map((p) => ({ ...p })) },
+            };
+          } else if (hit.kind === 'ahu') {
+            state.isDragging = true;
+            state.dragMode = 'move_ahu';
+            state.dragStartWorld = wp;
+            state.dragTargetMeta = { origX: state.ahu.x, origY: state.ahu.y };
+          }
+          return;
+        }
+
+        // Rect Room Drag
+        if (state.tool === 'rect') {
+          const p = { x: snapVal(wp.x), y: snapVal(wp.y) };
+          state.draftRect = { x1: p.x, y1: p.y, x2: p.x, y2: p.y };
+          state.isDragging = true;
+          state.dragMode = 'draw_rect';
+          render();
+          return;
+        }
+
+        // Circle Room Drag
+        if (state.tool === 'circle') {
+          const p = { x: snapVal(wp.x), y: snapVal(wp.y) };
+          state.draftCircle = { cx: p.x, cy: p.y, r: 0.5 };
+          state.isDragging = true;
+          state.dragMode = 'draw_circle';
+          render();
+          return;
+        }
+
+        // Polygon Click-to-Add
+        if (state.tool === 'poly') {
+          const anchor = state.draftPoly.length > 0 ? state.draftPoly[state.draftPoly.length - 1] : null;
+          const pt = getConstrainedPoint(wp, anchor, false);
+          if (state.draftPoly.length >= 3 && dist(pt, state.draftPoly[0]) <= 1.1) {
+            finishActiveDraft();
+            return;
+          }
+          state.draftPoly.push(pt);
+          drawingActions.classList.remove('hidden');
+          render();
+          return;
+        }
+
+        // Place AHU
+        if (state.tool === 'ahu') {
+          state.ahu = { id: 'ahu_1', x: snapVal(wp.x), y: snapVal(wp.y), w: 4, h: 3, z: 6.5 };
+          state.selected = { kind: 'ahu', id: 'ahu_1' };
+          showToast('Placed Air Handling Unit (AHU)');
+          setTool('select');
+          recalculateSystem();
+          return;
+        }
+
+        // Route Exhaust or Return Duct
+        if (state.tool === 'duct_exhaust' || state.tool === 'duct_return') {
+          const type = state.tool === 'duct_exhaust' ? 'exhaust' : 'return';
+          if (!state.draftDuct) {
+            const pt = getConstrainedPoint(wp, null, true, type);
+            state.draftDuct = { type, points: [pt] };
+            drawingActions.classList.remove('hidden');
+          } else {
+            const anchor = state.draftDuct.points[state.draftDuct.points.length - 1];
+            const pt = getConstrainedPoint(wp, anchor, true, type);
+            if (dist(pt, anchor) > 0.1) state.draftDuct.points.push(pt);
+          }
+          render();
+          return;
+        }
+
+        // Route Plumbing Pipe
+        if (state.tool === 'pipe_cold' || state.tool === 'pipe_hot' || state.tool === 'pipe_drain') {
+          const type = state.tool.replace('pipe_', '');
+          if (!state.draftPipe) {
+            const pt = getConstrainedPoint(wp, null, false);
+            state.draftPipe = { type, points: [pt] };
+            drawingActions.classList.remove('hidden');
+          } else {
+            const anchor = state.draftPipe.points[state.draftPipe.points.length - 1];
+            const pt = getConstrainedPoint(wp, anchor, false);
+            if (dist(pt, anchor) > 0.1) state.draftPipe.points.push(pt);
+          }
+          render();
+        }
+      });
+
+      canvas.addEventListener('dblclick', () => {
+        if (state.draftPoly.length >= 3 || state.draftDuct || state.draftPipe) {
+          finishActiveDraft();
+        }
+      });
+
+      canvas.addEventListener('pointermove', (e) => {
+        if (state.viewMode !== '2d') return;
+        const sp = getEventScreenPos(e);
+        const wp = screenToWorld(sp.x, sp.y);
+        state.mouseWorld = wp;
+        hudX.textContent = state.snapMode === '0.1in' ? formatFtIn(snapVal(wp.x)) : `${wp.x.toFixed(1)} ft`;
+        hudY.textContent = state.snapMode === '0.1in' ? formatFtIn(snapVal(wp.y)) : `${wp.y.toFixed(1)} ft`;
+
+        if (!state.isDragging) {
+          if (state.draftPoly.length > 0 || state.draftDuct || state.draftPipe) render();
+          return;
+        }
+
+        if (state.dragMode === 'pan') {
+          state.panX = state.dragTargetMeta.panX + (sp.x - state.dragStartScreen.x);
+          state.panY = state.dragTargetMeta.panY + (sp.y - state.dragStartScreen.y);
+          render();
+        } else if (state.dragMode === 'draw_rect') {
+          state.draftRect.x2 = snapVal(wp.x);
+          state.draftRect.y2 = snapVal(wp.y);
+          render();
         } else if (state.dragMode === 'draw_circle') {
           state.draftCircle.r = Math.max(0.5, snapVal(dist({ x: state.draftCircle.cx, y: state.draftCircle.cy }, wp)));
           render();
         } else if (state.dragMode === 'move_room') {
-// ... existing code ... -->
+          const { room, orig } = state.dragTargetMeta;
+          const dx = snapVal(wp.x - state.dragStartWorld.x);
+          const dy = snapVal(wp.y - state.dragStartWorld.y);
+          if (room.shape === 'rect') {
+            room.x = orig.x + dx;
+            room.y = orig.y + dy;
+          } else if (room.shape === 'circle') {
+            room.cx = orig.cx + dx;
+            room.cy = orig.cy + dy;
+          } else if (room.shape === 'poly') {
+            room.points = orig.points.map((p) => ({ x: p.x + dx, y: p.y + dy }));
+          }
+          recalculateSystem({ skipInspectorRebuild: true });
+        } else if (state.dragMode === 'move_ahu') {
+          state.ahu.x = snapVal(state.dragTargetMeta.origX + (wp.x - state.dragStartWorld.x));
+          state.ahu.y = snapVal(state.dragTargetMeta.origY + (wp.y - state.dragStartWorld.y));
+          recalculateSystem({ skipInspectorRebuild: true });
         } else if (state.dragMode === 'resize_rect') {
           const { room, cornerIdx } = state.dragTargetMeta;
           const sx = snapVal(wp.x), sy = snapVal(wp.y);
@@ -737,10 +2541,27 @@
           room.r = Math.max(0.5, snapVal(dist({ x: room.cx, y: room.cy }, wp)));
           recalculateSystem();
         } else if (state.dragMode === 'move_poly_vtx') {
-// ... existing code ... -->
-      canvas.addEventListener('pointerup', () => {
+          const { room, vtxIdx } = state.dragTargetMeta;
+          room.points[vtxIdx] = { x: snapVal(wp.x), y: snapVal(wp.y) };
+          recalculateSystem();
+        } else if (state.dragMode === 'move_duct_vtx') {
+          const { duct, vtxIdx } = state.dragTargetMeta;
+          const anchor = vtxIdx > 0 ? duct.points[vtxIdx - 1] : null;
+          duct.points[vtxIdx] = getConstrainedPoint(wp, anchor, true, duct.type);
+          recalculateSystem();
+        } else if (state.dragMode === 'move_pipe_vtx') {
+          const { pipe, vtxIdx } = state.dragTargetMeta;
+          const anchor = vtxIdx > 0 ? pipe.points[vtxIdx - 1] : null;
+          pipe.points[vtxIdx] = getConstrainedPoint(wp, anchor, false);
+          recalculateSystem();
+        }
+      });
+
+      window.addEventListener('pointerup', () => {
         if (!state.isDragging) return;
-        if (state.dragMode === 'draw_rect' && state.draftRect) {
+        if (state.dragMode === 'pan') {
+          canvas.style.cursor = state.tool === 'pan' ? 'grab' : state.tool === 'select' ? 'default' : 'crosshair';
+        } else if (state.dragMode === 'draw_rect' && state.draftRect) {
           const r = state.draftRect;
           const x = Math.min(r.x1, r.x2), y = Math.min(r.y1, r.y2);
           const w = Math.abs(r.x2 - r.x1), h = Math.abs(r.y2 - r.y1);
@@ -771,7 +2592,168 @@
         state.dragMode = null;
         state.dragTargetMeta = null;
       });
-// ... existing code ... -->
+
+      canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const sp = getEventScreenPos(e);
+        const before = screenToWorld(sp.x, sp.y);
+        const factor = e.deltaY < 0 ? 1.12 : 0.89;
+        state.zoom = Math.max(5, Math.min(90, state.zoom * factor));
+        state.panX = sp.x - before.x * state.zoom;
+        state.panY = sp.y - before.y * state.zoom;
+        hudZoom.textContent = `${Math.round((state.zoom / 18) * 100)}%`;
+        render();
+      }, { passive: false });
+
+      // =========================================================================
+      // 10. UI UPDATES: SUMMARY, SCHEDULE & INSPECTOR
+      // =========================================================================
+      function updateSummaryUI() {
+        const c = state.computed;
+        document.getElementById('sumExhaustCfm').textContent = `${Math.round(c.totalExhaustCfm)} CFM`;
+        document.getElementById('sumReturnPct').textContent = `${state.returnRatioPct}`;
+        document.getElementById('sumReturnCfm').textContent = `${Math.round(c.totalReturnCfm)} CFM`;
+        document.getElementById('sumFreshPct').textContent = `${100 - state.returnRatioPct}`;
+        document.getElementById('sumFreshCfm').textContent = `${Math.round(c.totalFreshCfm)} CFM`;
+        document.getElementById('labelFreshRatio').textContent = `OA ${100 - state.returnRatioPct}%`;
+        document.getElementById('sumPlumbingLen').textContent = `${c.totalPlumbingFt.toFixed(1)} ft`;
+
+        const peakVelEl = document.getElementById('sumPeakVel');
+        peakVelEl.textContent = `${Math.round(c.peakVel)} FPM`;
+        peakVelEl.className = `font-mono font-semibold ${c.peakVel > state.maxVelocity + 0.5 ? 'text-rose-400' : 'text-emerald-400'}`;
+
+        const maxStaticEl = document.getElementById('sumMaxStatic');
+        maxStaticEl.textContent = `${c.maxStatic.toFixed(3)} InWg`;
+        maxStaticEl.className = `font-mono font-semibold ${c.maxStatic > state.maxStaticLoss + 0.0005 ? 'text-rose-400' : 'text-emerald-400'}`;
+
+        const clashBadge = document.getElementById('sumClashBadge');
+        if (c.clashes.length > 0) {
+          clashBadge.textContent = `${c.clashes.length} CLASH${c.clashes.length > 1 ? 'ES' : ''}`;
+          clashBadge.classList.remove('hidden');
+        } else {
+          clashBadge.classList.add('hidden');
+        }
+
+        const statusBadge = document.getElementById('sumStatusBadge');
+        if (c.hasWarning) {
+          statusBadge.textContent = 'LIMIT EXCEEDED';
+          statusBadge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/40';
+        } else {
+          statusBadge.textContent = 'SYSTEM OK';
+          statusBadge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
+        }
+      }
+
+      function updateScheduleUI() {
+        document.getElementById('countDucts').textContent = state.ducts.length;
+        document.getElementById('countPipes').textContent = state.pipes.length;
+        document.getElementById('countRooms').textContent = state.rooms.length;
+
+        // Ducts Table
+        const tbodyDucts = document.getElementById('tbodyDucts');
+        tbodyDucts.innerHTML = state.ducts.map((d) => {
+          const r = state.computed.ductResults[d.id];
+          if (!r) return '';
+          const meta = DUCT_COLORS[d.type];
+          const isSel = state.selected?.kind === 'duct' && state.selected?.id === d.id;
+          return `
+            <tr data-kind="duct" data-id="${d.id}" class="cursor-pointer transition ${isSel ? 'bg-sky-500/15' : 'hover:bg-slate-800/60'}">
+              <td class="py-1.5 px-3 font-semibold text-white">${d.name}</td>
+              <td class="py-1.5 px-2"><span class="px-1.5 py-0.5 rounded border text-[10px] ${meta.badge}">${meta.label}</span></td>
+              <td class="py-1.5 px-2 text-slate-300 capitalize">${r.shape}</td>
+              <td class="py-1.5 px-2 text-right font-semibold text-sky-300">${r.sizeLabel}</td>
+              <td class="py-1.5 px-2 text-right text-slate-300">${(d.z ?? meta.defaultZ).toFixed(1)}'</td>
+              <td class="py-1.5 px-2 text-right text-slate-200">${Math.round(r.cfm)}</td>
+              <td class="py-1.5 px-2 text-right text-slate-400">${r.lengthFt.toFixed(1)}</td>
+              <td class="py-1.5 px-2 text-right text-slate-400">${r.elbows}</td>
+              <td class="py-1.5 px-2 text-right ${r.velWarning ? 'text-rose-400 font-bold' : 'text-slate-200'}">${Math.round(r.velocity)} FPM</td>
+              <td class="py-1.5 px-2 text-right ${r.staticWarning ? 'text-rose-400 font-bold' : 'text-slate-200'}">${r.pathLoss.toFixed(3)}</td>
+              <td class="py-1.5 px-3 text-center">
+                <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${r.hasWarning ? 'bg-rose-500/20 text-rose-300' : 'bg-emerald-500/20 text-emerald-300'}">${r.hasWarning ? 'CHECK' : 'OK'}</span>
+              </td>
+            </tr>`;
+        }).join('') || `<tr><td colspan="11" class="py-6 text-center text-slate-500 font-sans">No ducts drawn yet. Select Exhaust (E) or Return (T) to route ductwork.</td></tr>`;
+
+        // Plumbing Table
+        const tbodyPlumbing = document.getElementById('tbodyPlumbing');
+        tbodyPlumbing.innerHTML = state.pipes.map((p) => {
+          const pr = state.computed.pipeResults[p.id];
+          if (!pr) return '';
+          const meta = PIPE_COLORS[p.type];
+          const isSel = state.selected?.kind === 'pipe' && state.selected?.id === p.id;
+          return `
+            <tr data-kind="pipe" data-id="${p.id}" class="cursor-pointer transition ${isSel ? 'bg-sky-500/15' : 'hover:bg-slate-800/60'}">
+              <td class="py-1.5 px-3 font-semibold text-white">${p.name}</td>
+              <td class="py-1.5 px-2"><span class="px-1.5 py-0.5 rounded border text-[10px] ${meta.badge}">${meta.label}</span></td>
+              <td class="py-1.5 px-2 text-right text-cyan-300 font-semibold">${formatPipeDia(p.diameterIn)}</td>
+              <td class="py-1.5 px-2 text-right text-slate-200">${pr.startZ.toFixed(2)}'</td>
+              <td class="py-1.5 px-2 text-right text-slate-200">${pr.endZ.toFixed(2)}'</td>
+              <td class="py-1.5 px-2 text-right text-slate-400">${p.slopeInPerFt ? `${p.slopeInPerFt}"/ft` : 'Level'}</td>
+              <td class="py-1.5 px-2 text-right text-slate-300">${pr.lengthFt.toFixed(1)}</td>
+              <td class="py-1.5 px-2 text-right text-slate-400">${pr.elbows}</td>
+              <td class="py-1.5 px-3 text-right text-purple-300">${pr.dropIn.toFixed(1)}"</td>
+            </tr>`;
+        }).join('') || `<tr><td colspan="9" class="py-6 text-center text-slate-500 font-sans">No plumbing pipes drawn yet. Select Cold (W), Hot (O), or Drain (D) to route piping.</td></tr>`;
+
+        // Rooms Table
+        const tbodyRooms = document.getElementById('tbodyRooms');
+        tbodyRooms.innerHTML = state.rooms.map((rm) => {
+          const r = state.computed.roomResults[rm.id];
+          if (!r) return '';
+          const isSel = state.selected?.kind === 'room' && state.selected?.id === rm.id;
+          return `
+            <tr data-kind="room" data-id="${rm.id}" class="cursor-pointer transition ${isSel ? 'bg-sky-500/15' : 'hover:bg-slate-800/60'}">
+              <td class="py-1.5 px-3 font-semibold text-white">${rm.name}</td>
+              <td class="py-1.5 px-2 capitalize text-slate-400">${rm.shape}</td>
+              <td class="py-1.5 px-2 text-right text-slate-200">${r.area.toFixed(1)}</td>
+              <td class="py-1.5 px-2 text-right text-slate-300">${rm.height.toFixed(1)}</td>
+              <td class="py-1.5 px-2 text-right text-slate-400">${Math.round(r.volume)}</td>
+              <td class="py-1.5 px-2 text-right text-sky-300 font-semibold">${rm.ach}</td>
+              <td class="py-1.5 px-2 text-right text-orange-300 font-semibold">${Math.round(r.exhaustCfm)} CFM</td>
+              <td class="py-1.5 px-3 text-right text-sky-300 font-semibold">${Math.round(r.returnCfm)} CFM</td>
+            </tr>`;
+        }).join('') || `<tr><td colspan="8" class="py-6 text-center text-slate-500 font-sans">No rooms placed yet. Use Rect (R), Circle (C), or Polygon (P) to add rooms.</td></tr>`;
+
+        // Row click selection
+        document.querySelectorAll('#scheduleBody tbody tr[data-kind]').forEach((tr) => {
+          tr.onclick = () => {
+            state.selected = { kind: tr.dataset.kind, id: tr.dataset.id };
+            updateInspectorUI();
+            updateScheduleUI();
+            render();
+            if (state.viewMode === '3d') rebuild3DScene();
+          };
+        });
+      }
+
+      function updateInspectorUI() {
+        if (!state.selected) {
+          inspectorTitle.textContent = 'Inspector';
+          inspectorTypeBadge.textContent = 'NONE';
+          inspectorBody.innerHTML = `
+            <div class="text-slate-400 leading-relaxed space-y-2.5">
+              <p>Select any <span class="text-cyan-300 font-medium">Room</span>, <span class="text-orange-300 font-medium">Duct</span>, <span class="text-purple-300 font-medium">Pipe</span>, or the <span class="text-indigo-300 font-medium">AHU</span> to edit dimensions, ACH, shape, or 3D elevation.</p>
+              <div class="bg-slate-950/70 border border-slate-800 rounded-lg p-2.5 space-y-1 text-[11px]">
+                <div class="text-slate-300 font-semibold">Quick Room Sizing:</div>
+                <p>Click <span class="font-mono text-cyan-300">Rect (R)</span> or <span class="font-mono text-cyan-300">Circle (C)</span> to either drag with <span class="font-mono text-sky-300">0.1"</span> snap OR type exact <span class="font-mono text-sky-300">0.1 ft</span> dimensions.</p>
+              </div>
+              <div class="bg-slate-950/70 border border-slate-800 rounded-lg p-2.5 space-y-1 text-[11px]">
+                <div class="text-slate-300 font-semibold">CFM Formula:</div>
+                <p class="font-mono text-sky-300">CFM = (Area × Height × ACH) / 60</p>
+              </div>
+            </div>`;
+          return;
+        }
+
+        // ---- ROOM INSPECTOR ----
+        if (state.selected.kind === 'room') {
+          const room = state.rooms.find((r) => r.id === state.selected.id);
+          if (!room) { state.selected = null; return updateInspectorUI(); }
+          const res = state.computed.roomResults[room.id] || { area: 0, volume: 0, exhaustCfm: 0, returnCfm: 0 };
+
+          inspectorTitle.textContent = room.name;
+          inspectorTypeBadge.textContent = 'ROOM';
+
           let dimFields = '';
           if (room.shape === 'rect') {
             dimFields = `
@@ -879,7 +2861,161 @@
           document.getElementById('btnDelItem').onclick = deleteSelected;
           return;
         }
-// ... existing code ... -->
+
+        // ---- DUCT INSPECTOR ----
+        if (state.selected.kind === 'duct') {
+          const duct = state.ducts.find((d) => d.id === state.selected.id);
+          if (!duct) { state.selected = null; return updateInspectorUI(); }
+          const res = state.computed.ductResults[duct.id];
+          const meta = DUCT_COLORS[duct.type];
+          const effShape = duct.shapeOverride && duct.shapeOverride !== 'global' ? duct.shapeOverride : state.ductShape;
+
+          inspectorTitle.textContent = duct.name;
+          inspectorTypeBadge.textContent = meta.label.toUpperCase();
+
+          inspectorBody.innerHTML = `
+            <label class="block">
+              <span class="text-[11px] text-slate-400">Duct Label</span>
+              <input id="propDuctName" type="text" value="${duct.name}"
+                class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-sky-400 focus:outline-none" />
+            </label>
+            <label class="block">
+              <span class="text-[11px] text-slate-400">3D Elevation Z (ft)</span>
+              <input id="propDuctZ" type="number" min="0.5" max="35" step="0.2" value="${(duct.z ?? meta.defaultZ).toFixed(1)}"
+                class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 font-mono text-xs text-sky-300 focus:border-sky-400 focus:outline-none" />
+            </label>
+            <div class="grid grid-cols-2 gap-2">
+              <label class="block">
+                <span class="text-[11px] text-slate-400">Shape Override</span>
+                <select id="propDuctShape" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:border-sky-400 focus:outline-none">
+                  <option value="global" ${(!duct.shapeOverride || duct.shapeOverride === 'global') ? 'selected' : ''}>Global (${state.ductShape})</option>
+                  <option value="round" ${duct.shapeOverride === 'round' ? 'selected' : ''}>Round</option>
+                  <option value="rect" ${duct.shapeOverride === 'rect' ? 'selected' : ''}>Rectangular</option>
+                </select>
+              </label>
+              <label class="block ${effShape === 'rect' ? '' : 'opacity-40 pointer-events-none'}">
+                <span class="text-[11px] text-slate-400">Rect Height</span>
+                <select id="propDuctRectH" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 font-mono text-xs text-white focus:border-sky-400 focus:outline-none">
+                  <option value="global" ${(!duct.rectHeightOverride || duct.rectHeightOverride === 'global') ? 'selected' : ''}>Global</option>
+                  <option value="auto" ${duct.rectHeightOverride === 'auto' ? 'selected' : ''}>Auto</option>
+                  ${RECT_HEIGHT_OPTIONS.map((h) => `<option value="${h}" ${String(duct.rectHeightOverride) === String(h) ? 'selected' : ''}>${h}"</option>`).join('')}
+                </select>
+              </label>
+            </div>
+            ${res ? `
+            <div class="bg-slate-950/80 border border-slate-800 rounded-lg p-2.5 space-y-1.5 font-mono text-[11px]">
+              <div class="flex justify-between"><span class="text-slate-400">Auto Size</span><span class="text-sky-300 font-bold">${res.sizeLabel}</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Airflow</span><span class="text-white">${Math.round(res.cfm)} CFM</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Velocity</span><span class="${res.velWarning ? 'text-rose-400 font-bold' : 'text-emerald-400'}">${Math.round(res.velocity)} FPM</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Run / Elbows</span><span class="text-slate-300">${res.lengthFt.toFixed(1)} ft / ${res.elbows}</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Path Static</span><span class="${res.staticWarning ? 'text-rose-400 font-bold' : 'text-emerald-400'}">${res.pathLoss.toFixed(3)} InWg</span></div>
+            </div>` : ''}
+            <button id="btnDelItem" class="mt-1 w-full py-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 text-xs font-medium transition">Delete Duct</button>
+          `;
+
+          document.getElementById('propDuctName').oninput = (e) => { duct.name = e.target.value; inspectorTitle.textContent = duct.name; updateScheduleUI(); };
+          document.getElementById('propDuctZ').oninput = (e) => {
+            const v = parseFloat(e.target.value);
+            if (!isNaN(v) && v >= 0.5) { duct.z = v; recalculateSystem({ skipInspectorRebuild: true }); }
+          };
+          document.getElementById('propDuctShape').onchange = (e) => { duct.shapeOverride = e.target.value; recalculateSystem(); };
+          document.getElementById('propDuctRectH').onchange = (e) => { duct.rectHeightOverride = e.target.value; recalculateSystem(); };
+          document.getElementById('btnDelItem').onclick = deleteSelected;
+          return;
+        }
+
+        // ---- PIPE INSPECTOR ----
+        if (state.selected.kind === 'pipe') {
+          const pipe = state.pipes.find((p) => p.id === state.selected.id);
+          if (!pipe) { state.selected = null; return updateInspectorUI(); }
+          const pr = state.computed.pipeResults[pipe.id];
+          const meta = PIPE_COLORS[pipe.type];
+
+          inspectorTitle.textContent = pipe.name;
+          inspectorTypeBadge.textContent = meta.prefix;
+
+          inspectorBody.innerHTML = `
+            <label class="block">
+              <span class="text-[11px] text-slate-400">Pipe Label</span>
+              <input id="propPipeName" type="text" value="${pipe.name}"
+                class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-sky-400 focus:outline-none" />
+            </label>
+            <div class="grid grid-cols-2 gap-2">
+              <label class="block">
+                <span class="text-[11px] text-slate-400">Diameter</span>
+                <select id="propPipeDia" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 font-mono text-xs text-cyan-300 focus:border-sky-400 focus:outline-none">
+                  ${STANDARD_PIPE_IN.map((opt) => `<option value="${opt.val}" ${Math.abs(pipe.diameterIn - opt.val) < 0.01 ? 'selected' : ''}>${opt.label}</option>`).join('')}
+                </select>
+              </label>
+              <label class="block">
+                <span class="text-[11px] text-slate-400">Start Z (ft)</span>
+                <input id="propPipeZ" type="number" min="0.2" max="35" step="0.1" value="${(pipe.z ?? meta.defaultZ).toFixed(1)}"
+                  class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 font-mono text-xs text-white focus:border-sky-400 focus:outline-none" />
+              </label>
+            </div>
+            <label class="block">
+              <span class="text-[11px] text-slate-400">Drain Slope (in/ft)</span>
+              <select id="propPipeSlope" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 font-mono text-xs text-white focus:border-sky-400 focus:outline-none">
+                <option value="0" ${!pipe.slopeInPerFt ? 'selected' : ''}>Level (0"/ft)</option>
+                <option value="0.125" ${pipe.slopeInPerFt === 0.125 ? 'selected' : ''}>1/8" per ft</option>
+                <option value="0.25" ${pipe.slopeInPerFt === 0.25 ? 'selected' : ''}>1/4" per ft (Std DWV)</option>
+                <option value="0.5" ${pipe.slopeInPerFt === 0.5 ? 'selected' : ''}>1/2" per ft</option>
+              </select>
+            </label>
+            ${pr ? `
+            <div class="bg-slate-950/80 border border-slate-800 rounded-lg p-2.5 space-y-1.5 font-mono text-[11px]">
+              <div class="flex justify-between"><span class="text-slate-400">Total Run</span><span class="text-slate-200">${pr.lengthFt.toFixed(1)} ft</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">End Elevation</span><span class="text-cyan-300">${pr.endZ.toFixed(2)} ft</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Total Drop</span><span class="text-purple-300">${pr.dropIn.toFixed(1)}"</span></div>
+            </div>` : ''}
+            <button id="btnDelItem" class="mt-1 w-full py-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 text-xs font-medium transition">Delete Pipe</button>
+          `;
+
+          document.getElementById('propPipeName').oninput = (e) => { pipe.name = e.target.value; inspectorTitle.textContent = pipe.name; updateScheduleUI(); };
+          document.getElementById('propPipeDia').onchange = (e) => { pipe.diameterIn = parseFloat(e.target.value); recalculateSystem(); };
+          document.getElementById('propPipeZ').oninput = (e) => {
+            const v = parseFloat(e.target.value);
+            if (!isNaN(v) && v >= 0.2) { pipe.z = v; recalculateSystem({ skipInspectorRebuild: true }); }
+          };
+          document.getElementById('propPipeSlope').onchange = (e) => { pipe.slopeInPerFt = parseFloat(e.target.value); recalculateSystem(); };
+          document.getElementById('btnDelItem').onclick = deleteSelected;
+          return;
+        }
+
+        // ---- AHU INSPECTOR ----
+        if (state.selected.kind === 'ahu' && state.ahu) {
+          inspectorTitle.textContent = 'Air Handling Unit';
+          inspectorTypeBadge.textContent = 'AHU';
+          inspectorBody.innerHTML = `
+            <div class="grid grid-cols-2 gap-2">
+              <label class="block">
+                <span class="text-[11px] text-slate-400">Width (ft)</span>
+                <input id="propAhuW" type="number" min="2" max="15" step="0.5" value="${state.ahu.w}"
+                  class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 font-mono text-xs text-white focus:border-sky-400 focus:outline-none" />
+              </label>
+              <label class="block">
+                <span class="text-[11px] text-slate-400">Depth (ft)</span>
+                <input id="propAhuH" type="number" min="2" max="15" step="0.5" value="${state.ahu.h}"
+                  class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 font-mono text-xs text-white focus:border-sky-400 focus:outline-none" />
+              </label>
+            </div>
+            <label class="block">
+              <span class="text-[11px] text-slate-400">3D Center Z (ft)</span>
+              <input id="propAhuZ" type="number" min="2" max="30" step="0.5" value="${state.ahu.z ?? 6.5}"
+                class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 font-mono text-xs text-indigo-300 focus:border-sky-400 focus:outline-none" />
+            </label>
+            <button id="btnDelItem" class="mt-1 w-full py-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 text-xs font-medium transition">Remove AHU</button>
+          `;
+          document.getElementById('propAhuW').oninput = (e) => { const v = parseFloat(e.target.value); if (v >= 2) { state.ahu.w = v; recalculateSystem({ skipInspectorRebuild: true }); } };
+          document.getElementById('propAhuH').oninput = (e) => { const v = parseFloat(e.target.value); if (v >= 2) { state.ahu.h = v; recalculateSystem({ skipInspectorRebuild: true }); } };
+          document.getElementById('propAhuZ').oninput = (e) => { const v = parseFloat(e.target.value); if (v >= 2) { state.ahu.z = v; recalculateSystem({ skipInspectorRebuild: true }); } };
+          document.getElementById('btnDelItem').onclick = deleteSelected;
+        }
+      }
+
+      // =========================================================================
+      // 11. TOOLS, QUICK ROOM BAR, SAMPLE PLAN & CONTROLS
+      // =========================================================================
       const TOOL_HINTS = {
         select: 'Click a room, duct, or pipe to inspect & edit. Drag handles to resize or reroute.',
         pan: 'Click and drag to pan the blueprint. Scroll wheel to zoom.',
@@ -960,7 +3096,116 @@
           }`;
         });
       }
-// ... existing code ... -->
+
+      function deleteSelected() {
+        if (!state.selected) return;
+        const { kind, id } = state.selected;
+        if (kind === 'room') state.rooms = state.rooms.filter((r) => r.id !== id);
+        if (kind === 'duct') state.ducts = state.ducts.filter((d) => d.id !== id);
+        if (kind === 'pipe') state.pipes = state.pipes.filter((p) => p.id !== id);
+        if (kind === 'ahu') state.ahu = null;
+        state.selected = null;
+        recalculateSystem();
+        showToast('Deleted selected item');
+      }
+
+      function fitView() {
+        if (state.rooms.length === 0 && !state.ahu) {
+          state.panX = 80; state.panY = 70; state.zoom = 18;
+          hudZoom.textContent = '100%';
+          render();
+          return;
+        }
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        const include = (x, y) => {
+          minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+          minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+        };
+        for (const r of state.rooms) {
+          if (r.shape === 'rect') { include(r.x, r.y); include(r.x + r.w, r.y + r.h); }
+          else if (r.shape === 'circle') { include(r.cx - r.r, r.cy - r.r); include(r.cx + r.r, r.cy + r.r); }
+          else if (r.shape === 'poly') { r.points.forEach((p) => include(p.x, p.y)); }
+        }
+        if (state.ahu) { include(state.ahu.x - 3, state.ahu.y - 3); include(state.ahu.x + 3, state.ahu.y + 3); }
+
+        const pad = 60;
+        const cw = Math.max(200, canvas.clientWidth - pad * 2);
+        const ch = Math.max(200, canvas.clientHeight - pad * 2);
+        const spanX = Math.max(5, maxX - minX);
+        const spanY = Math.max(5, maxY - minY);
+        state.zoom = Math.max(6, Math.min(40, Math.min(cw / spanX, ch / spanY)));
+        state.panX = (canvas.clientWidth - spanX * state.zoom) / 2 - minX * state.zoom;
+        state.panY = (canvas.clientHeight - spanY * state.zoom) / 2 - minY * state.zoom;
+        hudZoom.textContent = `${Math.round((state.zoom / 18) * 100)}%`;
+        render();
+      }
+
+      function loadSamplePlan() {
+        state.rooms = [
+          { id: genId('room'), name: 'Main Office', shape: 'rect', x: 2, y: 2, w: 20, h: 14, height: 10, ach: 6 },
+          { id: genId('room'), name: 'Conference', shape: 'rect', x: 22, y: 2, w: 14, h: 14, height: 10, ach: 8 },
+          { id: genId('room'), name: 'Break & Restroom', shape: 'rect', x: 2, y: 16, w: 20, h: 10, height: 10, ach: 10 },
+          { id: genId('room'), name: 'Mech Room', shape: 'rect', x: 22, y: 16, w: 14, h: 10, height: 10, ach: 4 },
+        ];
+        state.ahu = { id: 'ahu_1', x: 29, y: 21, w: 4, h: 3, z: 6.5 };
+        state.ducts = [
+          { id: genId('duct'), name: 'EX-Main', type: 'exhaust', points: [{ x: 29, y: 21 }, { x: 29, y: 9 }, { x: 12, y: 9 }], shapeOverride: 'global', rectHeightOverride: 'global', z: 8.5 },
+          { id: genId('duct'), name: 'EX-Break', type: 'exhaust', points: [{ x: 29, y: 21 }, { x: 12, y: 21 }], shapeOverride: 'global', rectHeightOverride: 'global', z: 8.5 },
+          { id: genId('duct'), name: 'RT-Main', type: 'return', points: [{ x: 29, y: 21 }, { x: 26, y: 21 }, { x: 26, y: 11 }, { x: 12, y: 11 }], shapeOverride: 'global', rectHeightOverride: 'global', z: 9.2 },
+          { id: genId('duct'), name: 'RT-Break', type: 'return', points: [{ x: 26, y: 21 }, { x: 26, y: 23 }, { x: 12, y: 23 }], shapeOverride: 'global', rectHeightOverride: 'global', z: 9.2 },
+        ];
+        state.pipes = [
+          { id: genId('pipe'), name: 'CW-1', type: 'cold', points: [{ x: 34, y: 24 }, { x: 8, y: 24 }, { x: 8, y: 19 }], diameterIn: 1, z: 7.4, slopeInPerFt: 0 },
+          { id: genId('pipe'), name: 'HW-1', type: 'hot', points: [{ x: 34, y: 23.2 }, { x: 9, y: 23.2 }, { x: 9, y: 19 }], diameterIn: 0.75, z: 7.0, slopeInPerFt: 0 },
+          { id: genId('pipe'), name: 'DWV-1', type: 'drain', points: [{ x: 8, y: 19 }, { x: 8, y: 25 }, { x: 35, y: 25 }], diameterIn: 3, z: 2.0, slopeInPerFt: 0.25 },
+        ];
+        state.selected = null;
+        recalculateSystem();
+        fitView();
+        showToast('Loaded sample HVAC + Plumbing MEP layout');
+      }
+
+      // =========================================================================
+      // 12. EVENT LISTENERS
+      // =========================================================================
+      btnView2D.addEventListener('click', () => setViewMode('2d'));
+      btnView3D.addEventListener('click', () => setViewMode('3d'));
+
+      document.querySelectorAll('.tool-btn').forEach((btn) => {
+        btn.addEventListener('click', () => setTool(btn.dataset.tool));
+      });
+
+      document.getElementById('inputMaxVel').addEventListener('input', (e) => {
+        const v = parseFloat(e.target.value);
+        if (!isNaN(v) && v >= 100) { state.maxVelocity = v; recalculateSystem(); }
+      });
+      document.getElementById('inputMaxStatic').addEventListener('input', (e) => {
+        const v = parseFloat(e.target.value);
+        if (!isNaN(v) && v > 0) { state.maxStaticLoss = v; recalculateSystem(); }
+      });
+      document.getElementById('inputReturnRatio').addEventListener('input', (e) => {
+        const v = parseFloat(e.target.value);
+        if (!isNaN(v) && v >= 0 && v <= 100) { state.returnRatioPct = v; recalculateSystem(); }
+      });
+
+      function setGlobalDuctShape(shape) {
+        state.ductShape = shape;
+        btnShapeRound.className = shape === 'round'
+          ? 'px-2.5 py-1 rounded-md text-xs font-semibold transition bg-sky-600 text-white shadow'
+          : 'px-2.5 py-1 rounded-md text-xs font-semibold transition text-slate-300 hover:text-white';
+        btnShapeRect.className = shape === 'rect'
+          ? 'px-2.5 py-1 rounded-md text-xs font-semibold transition bg-sky-600 text-white shadow'
+          : 'px-2.5 py-1 rounded-md text-xs font-semibold transition text-slate-300 hover:text-white';
+        selectGlobalRectHeight.classList.toggle('hidden', shape !== 'rect');
+        recalculateSystem();
+      }
+      btnShapeRound.addEventListener('click', () => setGlobalDuctShape('round'));
+      btnShapeRect.addEventListener('click', () => setGlobalDuctShape('rect'));
+      selectGlobalRectHeight.addEventListener('change', (e) => {
+        state.rectMaxHeight = e.target.value;
+        recalculateSystem();
+      });
+
       selectSnapStep.addEventListener('change', () => {
         state.snapMode = selectSnapStep.value;
         const labels = { '0.1in': '0.1"', '0.1ft': '0.1\'', '1in': '1"', '1ft': '1\'', 'off': 'OFF' };
@@ -976,4 +3221,149 @@
       });
 
       document.getElementById('btnToggleOrtho').addEventListener('click', () => {
-// ... existing code ... -->
+        state.orthoSnap = !state.orthoSnap;
+        const badge = document.getElementById('orthoBadge');
+        badge.textContent = state.orthoSnap ? 'ON' : 'OFF';
+        const btn = document.getElementById('btnToggleOrtho');
+        btn.className = state.orthoSnap
+          ? 'flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium bg-sky-500/15 text-sky-300 border border-sky-500/30 transition'
+          : 'flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 text-slate-400 border border-slate-700 transition';
+      });
+
+      document.getElementById('btnFinishDraw').addEventListener('click', finishActiveDraft);
+      document.getElementById('btnCancelDraw').addEventListener('click', cancelDraft);
+      document.getElementById('btnLoadSample').addEventListener('click', loadSamplePlan);
+      document.getElementById('btnDeleteSelected').addEventListener('click', deleteSelected);
+
+      // Two-click safe Clear (no confirm() dialog)
+      document.getElementById('btnClearAll').addEventListener('click', () => {
+        const btn = document.getElementById('btnClearAll');
+        if (!state.clearPending) {
+          state.clearPending = true;
+          btn.textContent = 'Confirm?';
+          btn.classList.add('bg-rose-600', 'text-white', 'border-rose-500');
+          clearTimeout(state.clearConfirmTimer);
+          state.clearConfirmTimer = setTimeout(() => {
+            state.clearPending = false;
+            btn.textContent = 'Clear';
+            btn.classList.remove('bg-rose-600', 'text-white', 'border-rose-500');
+          }, 3000);
+          return;
+        }
+        state.clearPending = false;
+        clearTimeout(state.clearConfirmTimer);
+        btn.textContent = 'Clear';
+        btn.classList.remove('bg-rose-600', 'text-white', 'border-rose-500');
+        state.rooms = [];
+        state.ahu = null;
+        state.ducts = [];
+        state.pipes = [];
+        state.selected = null;
+        cancelDraft();
+        recalculateSystem();
+        showToast('Cleared floorplan');
+      });
+
+      // Zoom Controls
+      document.getElementById('btnZoomIn').addEventListener('click', () => {
+        state.zoom = Math.min(90, state.zoom * 1.2);
+        hudZoom.textContent = `${Math.round((state.zoom / 18) * 100)}%`;
+        render();
+      });
+      document.getElementById('btnZoomOut').addEventListener('click', () => {
+        state.zoom = Math.max(5, state.zoom / 1.2);
+        hudZoom.textContent = `${Math.round((state.zoom / 18) * 100)}%`;
+        render();
+      });
+      document.getElementById('btnZoomFit').addEventListener('click', fitView);
+
+      // 3D Controls
+      document.querySelectorAll('.cam-btn').forEach((btn) => {
+        btn.addEventListener('click', () => set3DCameraPreset(btn.dataset.cam));
+      });
+      document.getElementById('btn3DWalls').addEventListener('click', (e) => {
+        const modes = ['xray', 'solid', 'wire'];
+        const labels = { xray: 'Walls: X-Ray', solid: 'Walls: Solid', wire: 'Walls: Wire' };
+        state.show3DWalls = modes[(modes.indexOf(state.show3DWalls) + 1) % modes.length];
+        e.target.textContent = labels[state.show3DWalls];
+        rebuild3DScene();
+      });
+      document.getElementById('btn3DHvac').addEventListener('click', (e) => {
+        state.show3DHvac = !state.show3DHvac;
+        e.target.classList.toggle('opacity-40', !state.show3DHvac);
+        rebuild3DScene();
+      });
+      document.getElementById('btn3DPlumbing').addEventListener('click', (e) => {
+        state.show3DPlumbing = !state.show3DPlumbing;
+        e.target.classList.toggle('opacity-40', !state.show3DPlumbing);
+        rebuild3DScene();
+      });
+
+      // Schedule Tabs & Drawer Collapse
+      function setActiveTab(tab) {
+        state.activeTab = tab;
+        const tabs = { ducts: ['tabDucts', 'tableDucts'], plumbing: ['tabPlumbing', 'tablePlumbing'], rooms: ['tabRooms', 'tableRooms'] };
+        for (const [k, [btnId, tblId]] of Object.entries(tabs)) {
+          const active = k === tab;
+          document.getElementById(btnId).className = active
+            ? 'px-3 py-1 rounded-md text-xs font-semibold bg-sky-600/20 text-sky-300 border border-sky-500/30 transition whitespace-nowrap'
+            : 'px-3 py-1 rounded-md text-xs font-semibold text-slate-400 hover:text-slate-200 border border-transparent transition whitespace-nowrap';
+          document.getElementById(tblId).classList.toggle('hidden', !active);
+        }
+      }
+      document.getElementById('tabDucts').addEventListener('click', () => setActiveTab('ducts'));
+      document.getElementById('tabPlumbing').addEventListener('click', () => setActiveTab('plumbing'));
+      document.getElementById('tabRooms').addEventListener('click', () => setActiveTab('rooms'));
+
+      document.getElementById('btnToggleSchedule').addEventListener('click', () => {
+        state.scheduleExpanded = !state.scheduleExpanded;
+        document.getElementById('scheduleDrawer').style.height = state.scheduleExpanded ? '205px' : '38px';
+        document.getElementById('scheduleToggleLabel').textContent = state.scheduleExpanded ? 'Collapse' : 'Expand';
+        document.getElementById('scheduleChevron').style.transform = state.scheduleExpanded ? 'rotate(0deg)' : 'rotate(180deg)';
+        setTimeout(() => { resizeCanvas(); render(); }, 220);
+      });
+
+      document.getElementById('btnToggleInspectorMobile').addEventListener('click', () => {
+        inspectorPanel.classList.toggle('hidden');
+        inspectorPanel.classList.toggle('fixed');
+        inspectorPanel.classList.toggle('right-0');
+        inspectorPanel.classList.toggle('top-24');
+        inspectorPanel.classList.toggle('bottom-10');
+      });
+
+      // Keyboard Shortcuts
+      window.addEventListener('keydown', (e) => {
+        if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+        const key = e.key.toLowerCase();
+        if (key === '2') setViewMode('2d');
+        else if (key === '3') setViewMode('3d');
+        else if (key === 'v') setTool('select');
+        else if (key === 'h') setTool('pan');
+        else if (key === 'r') setTool('rect');
+        else if (key === 'c') setTool('circle');
+        else if (key === 'p') setTool('poly');
+        else if (key === 'a') setTool('ahu');
+        else if (key === 'e') setTool('duct_exhaust');
+        else if (key === 't') setTool('duct_return');
+        else if (key === 'w') setTool('pipe_cold');
+        else if (key === 'o') setTool('pipe_hot');
+        else if (key === 'd') setTool('pipe_drain');
+        else if (e.key === 'Enter') finishActiveDraft();
+        else if (e.key === 'Escape') cancelDraft();
+        else if (e.key === 'Delete' || e.key === 'Backspace') deleteSelected();
+      });
+
+      window.addEventListener('resize', () => {
+        resizeCanvas();
+        render();
+      });
+
+      // =========================================================================
+      // 13. INITIALIZATION
+      // =========================================================================
+      resizeCanvas();
+      loadSamplePlan();
+    })();
+  </script>
+</body>
+</html>
