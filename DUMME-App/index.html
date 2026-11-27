@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ender-Arm Control Panel & App Database</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --card: #181c26;
+      --border: #2a3040;
+      --text: #e6e9f2;
+      --muted: #8b94a8;
+      --accent: #4f8cff;
+      --accent-hover: #3b78eb;
+      --green: #2ecc71;
+      --red: #e74c3c;
+      --amber: #f39c12;
+    }
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    body { margin: 0; background: var(--bg); color: var(--text); padding: 20px; }
+    header {
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+      gap: 12px; padding-bottom: 16px; border-bottom: 1px solid var(--border); margin-bottom: 20px;
+    }
+    h1 { margin: 0; font-size: 1.35rem; display: flex; align-items: center; gap: 10px; }
+    .badge {
+      font-size: 0.75rem; padding: 4px 10px; border-radius: 999px;
+      background: #232836; color: var(--muted); border: 1px solid var(--border);
+    }
+    .badge.connected { background: rgba(46,204,113,0.15); color: var(--green); border-color: var(--green); }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; }
+    button {
+      background: var(--accent); color: #fff; border: none; border-radius: 8px;
+      padding: 8px 14px; font-weight: 600; cursor: pointer; font-size: 0.88rem;
+      transition: background 0.15s, transform 0.05s;
+    }
+    button:hover { background: var(--accent-hover); }
+    button:active { transform: scale(0.98); }
+    button.secondary { background: #252b3b; color: var(--text); border: 1px solid var(--border); }
+    button.secondary:hover { background: #2f374a; }
+    button.danger { background: var(--red); }
+    button.danger:hover { background: #c0392b; }
+    button.success { background: var(--green); color: #0b1911; }
+    button.small { padding: 5px 10px; font-size: 0.8rem; }
+    .grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 20px; }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+      padding: 18px; display: flex; flex-direction: column; gap: 14px;
+    }
+    .card h2 { margin: 0; font-size: 1.05rem; color: #fff; display: flex; justify-content: space-between; align-items: center; }
+    .joint {
+      background: #121620; border: 1px solid var(--border); border-radius: 10px; padding: 12px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .joint-header { display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; }
+    .joint-val { font-family: ui-monospace, Consolas, monospace; color: var(--accent); font-weight: 700; }
+    .joint-controls { display: flex; align-items: center; gap: 8px; }
+    input[type="range"] { flex: 1; accent-color: var(--accent); cursor: pointer; }
+    input[type="text"], input[type="number"], textarea {
+      background: #10131c; color: var(--text); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 10px; font-size: 0.88rem; width: 100%;
+    }
+    .row { display: flex; gap: 8px; align-items: center; }
+    .app-list { display: flex; flex-direction: column; gap: 10px; max-height: 360px; overflow-y: auto; }
+    .app-item {
+      background: #121620; border: 1px solid var(--border); border-radius: 10px; padding: 12px;
+      display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    }
+    .app-meta { display: flex; flex-direction: column; gap: 3px; }
+    .app-name { font-weight: 700; font-size: 0.95rem; }
+    .app-desc { font-size: 0.78rem; color: var(--muted); font-family: ui-monospace, Consolas, monospace; }
+Working
