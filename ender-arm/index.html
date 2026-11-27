@@ -84,6 +84,16 @@
     .log-tx { color: #7cb3ff; }
     .log-rx { color: #8be9a8; }
     .log-sys { color: #f39c12; }
+
+    .motor-pills { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .pill {
+      background: #121620; color: var(--muted); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 8px; text-align: center; cursor: pointer;
+      font-weight: 700; font-size: 0.88rem; transition: all 0.15s;
+    }
+    .pill:hover { border-color: var(--accent); color: var(--text); }
+    .pill.active { background: rgba(79,140,255,0.2); border-color: var(--accent); color: #fff; }
+    .spin-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   </style>
 </head>
 <body>
@@ -99,6 +109,36 @@
       <button class="danger" onclick="sendCmd('M112')">🛑 E-STOP</button>
     </div>
   </header>
+
+  <!-- QUICK MOTOR SPIN -->
+  <div class="card" style="margin-bottom: 20px;">
+    <h2>
+      ⚡ Quick Motor Spin
+      <span style="font-size:0.8rem; color:var(--muted); font-weight:400;">
+        Pick a motor &amp; click to spin relative to current position
+      </span>
+    </h2>
+    <div class="motor-pills" id="motorPills">
+      <button class="pill active" onclick="selectMotor('X', this)">XM (Base)</button>
+      <button class="pill" onclick="selectMotor('Y', this)">YM (Shoulder)</button>
+      <button class="pill" onclick="selectMotor('Z', this)">ZAM (Elbow)</button>
+      <button class="pill" onclick="selectMotor('A', this)">EM (Wrist)</button>
+    </div>
+    <div class="spin-grid">
+      <button class="secondary" onclick="quickSpin(-360)">⟲ -360° (1 rev)</button>
+      <button class="secondary" onclick="quickSpin(-90)">⟲ -90°</button>
+      <button class="secondary" onclick="quickSpin(-45)">⟲ -45°</button>
+      <button class="success" onclick="quickSpin(45)">⟳ +45°</button>
+      <button class="success" onclick="quickSpin(90)">⟳ +90°</button>
+      <button class="success" onclick="quickSpin(360)">⟳ +360° (1 rev)</button>
+    </div>
+    <div class="row">
+      <input id="customDeg" type="number" value="180" style="max-width:120px;" />
+      <span style="color:var(--muted); font-size:0.85rem;">degrees</span>
+      <button onclick="quickSpin(Number(document.getElementById('customDeg').value))">▶ Spin Selected Motor</button>
+      <button class="secondary" onclick="quickSpin(-Number(document.getElementById('customDeg').value))">◀ Reverse</button>
+    </div>
+  </div>
 
   <div class="grid">
     <!-- LEFT: LIVE JOINT CONTROLS -->
@@ -173,7 +213,22 @@
     ];
 
     let port = null, writer = null, reader = null;
+    let selectedMotor = 'X';
     let apps = JSON.parse(localStorage.getItem('ender_arm_apps') || 'null') || DEFAULT_APPS;
+
+    function selectMotor(axis, btn) {
+      selectedMotor = axis;
+      document.querySelectorAll('#motorPills .pill').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+    }
+
+    async function quickSpin(deg) {
+      if (!deg || isNaN(deg)) return;
+      const speed = Number(document.getElementById('speedInput').value || 45) * 60;
+      await sendCmd('G91');
+      await sendCmd(`G1 ${selectedMotor}${deg} F${speed}`);
+      await sendCmd('G90');
+    }
 
     function log(msg, cls = 'log-sys') {
       const el = document.getElementById('console');
@@ -240,6 +295,8 @@
         document.getElementById('connectBtn').textContent = '✅ Connected';
         log('Connected to SKR Mini E3 V3.0', 'log-sys');
         readLoop();
+        await writer.write(new TextEncoder().encode('\n'));
+        await new Promise(r => setTimeout(r, 150));
         await sendCmd('G90');
       } catch (err) {
         log('Connection failed: ' + err.message, 'log-sys');
