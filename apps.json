@@ -15,6 +15,6 @@
     "name": "DUMME",
     "category": "Tools",
     "desc": "Duct Simulator for MEP Engineering",
-    "path": "./DUMME-app/index.html"
+    "path": "./DUMME-App/index.html"
   }
 ]
