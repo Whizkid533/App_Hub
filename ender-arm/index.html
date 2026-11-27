@@ -368,9 +368,9 @@
           <div class="panel-title">Single-Axis Jog</div>
           <div class="row">
             <span class="muted">SPEED</span>
-            <input id="speedInput" type="range" min="10" max="220" value="55" style="width:100px;"
+            <input id="speedInput" type="range" min="15" max="360" value="120" style="width:110px;"
               oninput="document.getElementById('speedLbl').textContent = this.value + ' °/s'" />
-            <span id="speedLbl" class="mono" style="width:52px; text-align:right; font-size:11px;">55 °/s</span>
+            <span id="speedLbl" class="mono" style="width:56px; text-align:right; font-size:11px;">120 °/s</span>
           </div>
         </div>
 
@@ -661,7 +661,7 @@
     }
 
     function getSpeedDegSec() {
-      return Number(document.getElementById('speedInput').value || 55);
+      return Number(document.getElementById('speedInput').value || 120);
     }
     function getFeedrate() {
       return Math.round(getSpeedDegSec() * 60);
@@ -757,24 +757,23 @@
       await sendCmd('G90');
     }
 
-    function startHoldSpin(dir, btn) {
-      stopHoldSpin();
+    let isHoldingSpin = false;
+    async function startHoldSpin(dir, btn) {
+      if (isHoldingSpin) return;
+      isHoldingSpin = true;
       if (btn) btn.classList.add('holding');
-      const spd = getSpeedDegSec();
-      const chunk = Math.max(3, Math.round(spd * 0.2)) * dir;
-      quickSpin(chunk);
-      holdInterval = setInterval(() => {
-        if (okResolvers.length < 3) quickSpin(chunk);
-      }, 160);
+      // Single continuous smooth move — zero planner segmentation stutter! Stops instantly on release via M410.
+      await quickSpin(dir * 3600);
     }
 
     async function stopHoldSpin(btn) {
       if (btn) btn.classList.remove('holding');
-      if (holdInterval) {
-        clearInterval(holdInterval);
-        holdInterval = null;
-        ['X', 'Y', 'Z', 'A'].forEach(ax => { projTarget[ax] = projPos[ax]; });
-        if (writer) await sendCmd('M410');
+      if (!isHoldingSpin) return;
+      isHoldingSpin = false;
+      ['X', 'Y', 'Z', 'A'].forEach(ax => { projTarget[ax] = hasHardwareStream ? measPos[ax] : projPos[ax]; });
+      if (writer) {
+        await sendCmd('M410');
+        await sendCmd('G90');
       }
     }
 
@@ -926,7 +925,6 @@
       if (!writer) return;
       if (j.id === 'G') await sendCmd(`M280 P0 S${j.val}`);
       else {
-        await sendCmd('G90');
         await sendCmd(`G1 ${j.id}${hwAngle(j, j.val)} F${getFeedrate()}`);
       }
     }
@@ -1042,8 +1040,14 @@
         await new Promise(r => setTimeout(r, 150));
         await sendCmd('G90');
         await sendCmd('M84 S0');
+        // Unlock full 360 deg/s speed, crisp 800 deg/s^2 acceleration, and 0.5 deg junction deviation in RAM!
+        await sendCmd('M92 X8.889 Y8.889 Z8.889 A8.889');
+        await sendCmd('M203 X360 Y360 Z360 A360');
+        await sendCmd('M201 X1500 Y1500 Z1500 A1500');
+        await sendCmd('M204 P800 T800');
+        await sendCmd('M205 J0.50');
         await sendCmd('M569 S1 X Y Z A'); // StealthChop enables StallGuard4 SG_RESULT!
-        await sendCmd('M122 P150 Q');     // Start 6.7Hz @TELEM hardware stream!
+        await sendCmd('M122 P250 Q');     // Lightweight 4Hz @TELEM stream (zero UART bottleneck)
         setTimeout(() => {
           if (!hasHardwareStream && writer) {
             document.getElementById('telemPill').classList.add('warn');
