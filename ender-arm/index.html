@@ -1084,17 +1084,18 @@
       if (id !== 'G' && j.enabled) projTarget[id] = hwAngle(j, j.val);
       if (liveFollow && writer && j.enabled) {
         if (liveDragTimer) clearTimeout(liveDragTimer);
-        liveDragTimer = setTimeout(() => sendSingleJoint(j), 80);
+        liveDragTimer = setTimeout(() => sendSingleJoint(j, true), 65);
       }
     }
 
-    async function sendSingleJoint(j) {
+    async function sendSingleJoint(j, flushPrev = false) {
       if (!j.enabled) return;
       if (j.id !== 'G') projTarget[j.id] = hwAngle(j, j.val);
       if (!writer) return;
       if (j.id === 'G') await sendCmd(`M280 P0 S${j.val}`);
       else {
-        await sendCmd(`G1 ${j.id}${hwAngle(j, j.val)} F${getFeedrate()}`);
+        if (flushPrev) await writer.write(new TextEncoder().encode(`M410\nG90\nG1 ${j.id}${hwAngle(j, j.val)} F${getFeedrate()}\n`));
+        else await sendCmd(`G1 ${j.id}${hwAngle(j, j.val)} F${getFeedrate()}`);
       }
     }
 
@@ -1171,11 +1172,80 @@
       await sendCmd(`M204 P${v} T${v}`);
     }
 
-    // --- SIMULTANEOUS MULTI-KEY (W+D / Q+E / Z+C) & 2D XY VECTOR ENGINE ---
+    // --- ZERO-LAG STATE-CHANGE MULTI-MOTOR VECTOR ENGINE ---
+    // Instead of flooding Marlin's 16-block planner buffer with tiny slices, we send ONE continuous
+    // multi-axis G1 vector whenever the held key combination changes, and M410 instant-stop on release!
     const KEY_MAP = {
       arrowleft: 'a', arrowright: 'd', arrowup: 'w', arrowdown: 's',
       a: 'a', d: 'd', w: 'w', s: 's', q: 'q', e: 'e', z: 'z', c: 'c'
     };
+
+    let activeVecSig = '0,0,0,0';
+    let vecTxBusy = false;
+    let pendingVecApply = false;
+    let lastPadUpdateMs = 0;
+
+    function computeDesiredVector() {
+      let vx = (heldKeys.has('d') ? 1 : 0) - (heldKeys.has('a') ? 1 : 0);
+      let vy = (heldKeys.has('w') ? 1 : 0) - (heldKeys.has('s') ? 1 : 0);
+      let vz = (heldKeys.has('e') ? 1 : 0) - (heldKeys.has('q') ? 1 : 0);
+      let va = (heldKeys.has('c') ? 1 : 0) - (heldKeys.has('z') ? 1 : 0);
+      if (padVec.active) {
+        vx = Math.abs(padVec.x) > 0.12 ? Number(padVec.x.toFixed(1)) : vx;
+        vy = Math.abs(padVec.y) > 0.12 ? Number(padVec.y.toFixed(1)) : vy;
+      }
+      return { X: vx, Y: vy, Z: vz, A: va };
+    }
+
+    async function applyVectorMotion() {
+      if (vecTxBusy) { pendingVecApply = true; return; }
+      vecTxBusy = true;
+      try {
+        const vec = computeDesiredVector();
+        const sig = `${vec.X},${vec.Y},${vec.Z},${vec.A}`;
+        if (sig === activeVecSig) return;
+        const wasMoving = activeVecSig !== '0,0,0,0';
+        activeVecSig = sig;
+
+        if (sig === '0,0,0,0') {
+          // All keys released -> instant stop (<5ms, zero queued blocks!) + sync exact angle
+          ['X', 'Y', 'Z', 'A'].forEach(ax => { projTarget[ax] = hasHardwareStream ? measPos[ax] : projPos[ax]; });
+          if (writer && wasMoving) {
+            await writer.write(new TextEncoder().encode('M410\nG90\nM114\n'));
+          }
+          return;
+        }
+
+        const spd = getSpeedDegSec();
+        const parts = [];
+        let magSq = 0;
+        ['X', 'Y', 'Z', 'A'].forEach(ax => {
+          const v = vec[ax];
+          if (v === 0) return;
+          const j = JOINTS.find(it => it.id === ax);
+          if (j && !j.enabled) toggleAxisEnabled(ax, true);
+          const dirSign = (j && j.invert) ? -v : v;
+          // Continuous 3600-deg vector glide scaled proportionally per axis!
+          const dist = Number((dirSign * 3600).toFixed(1));
+          projTarget[ax] = (hasHardwareStream ? measPos[ax] : projPos[ax]) + dist;
+          parts.push(`${ax}${dist}`);
+          magSq += (v * spd) * (v * spd);
+        });
+
+        const feed = Math.max(60, Math.round(Math.sqrt(magSq) * 60));
+        if (writer) {
+          // If changing direction/chord mid-move (e.g. D -> W+D), flush old vector with M410 & launch new vector immediately!
+          const prefix = wasMoving ? 'M410\n' : '';
+          await writer.write(new TextEncoder().encode(`${prefix}G91\nG1 ${parts.join(' ')} F${feed}\nG90\n`));
+        }
+      } finally {
+        vecTxBusy = false;
+        if (pendingVecApply) {
+          pendingVecApply = false;
+          applyVectorMotion();
+        }
+      }
+    }
 
     function updateKeyCapUI() {
       ['w', 'a', 's', 'd', 'q', 'e', 'z', 'c'].forEach(k => {
@@ -1185,16 +1255,23 @@
     }
 
     function vKeyDown(k) {
+      if (heldKeys.has(k)) return;
       heldKeys.add(k);
       updateKeyCapUI();
+      applyVectorMotion();
     }
     function vKeyUp(k) {
+      if (!heldKeys.has(k)) return;
       heldKeys.delete(k);
       updateKeyCapUI();
+      applyVectorMotion();
     }
     function clearAllHeldKeys() {
+      if (heldKeys.size === 0 && !padVec.active) return;
       heldKeys.clear();
+      padVec = { x: 0, y: 0, active: false };
       updateKeyCapUI();
+      applyVectorMotion();
     }
 
     document.addEventListener('keydown', e => {
@@ -1207,13 +1284,13 @@
       const mapped = KEY_MAP[raw];
       if (mapped) {
         e.preventDefault();
-        if (!heldKeys.has(mapped)) vKeyDown(mapped);
+        if (!e.repeat) vKeyDown(mapped);
       }
     });
 
     document.addEventListener('keyup', e => {
       const mapped = KEY_MAP[e.key.toLowerCase()];
-      if (mapped && heldKeys.has(mapped)) {
+      if (mapped) {
         e.preventDefault();
         vKeyUp(mapped);
       }
@@ -1226,72 +1303,31 @@
       const pad = document.getElementById('xyPad');
       const puck = document.getElementById('xyPuck');
       if (!pad) return;
-      function updatePad(e) {
+      function updatePad(e, force = false) {
         const r = pad.getBoundingClientRect();
         const nx = Math.max(-1, Math.min(1, ((e.clientX - r.left) / r.width) * 2 - 1));
         const ny = Math.max(-1, Math.min(1, 1 - ((e.clientY - r.top) / r.height) * 2));
         padVec = { x: nx, y: ny, active: true };
         puck.style.left = `${(nx + 1) * 50}%`;
         puck.style.top = `${(1 - ny) * 50}%`;
+        const now = performance.now();
+        if (force || now - lastPadUpdateMs > 140) {
+          lastPadUpdateMs = now;
+          applyVectorMotion();
+        }
       }
       function releasePad() {
+        if (!padVec.active) return;
         padVec = { x: 0, y: 0, active: false };
         puck.style.left = '50%';
         puck.style.top = '50%';
+        applyVectorMotion();
       }
-      pad.addEventListener('pointerdown', e => { pad.setPointerCapture(e.pointerId); updatePad(e); });
-      pad.addEventListener('pointermove', e => { if (padVec.active) updatePad(e); });
+      pad.addEventListener('pointerdown', e => { pad.setPointerCapture(e.pointerId); updatePad(e, true); });
+      pad.addEventListener('pointermove', e => { if (padVec.active) updatePad(e, false); });
       pad.addEventListener('pointerup', releasePad);
       pad.addEventListener('pointercancel', releasePad);
     })();
-
-    // 75ms Continuous Multi-Axis Vector Streamer (smooth blended G1 X.. Y.. Z.. A..!)
-    setInterval(async () => {
-      let vx = (heldKeys.has('d') ? 1 : 0) - (heldKeys.has('a') ? 1 : 0);
-      let vy = (heldKeys.has('w') ? 1 : 0) - (heldKeys.has('s') ? 1 : 0);
-      let vz = (heldKeys.has('e') ? 1 : 0) - (heldKeys.has('q') ? 1 : 0);
-      let va = (heldKeys.has('c') ? 1 : 0) - (heldKeys.has('z') ? 1 : 0);
-
-      if (padVec.active) {
-        vx = Math.abs(padVec.x) > 0.08 ? padVec.x : vx;
-        vy = Math.abs(padVec.y) > 0.08 ? padVec.y : vy;
-      }
-
-      if (vx === 0 && vy === 0 && vz === 0 && va === 0) return;
-      if (writer && vectorInFlight >= 2) return; // Keep max 2 lookahead slices buffered (150ms stop latency, zero stutter!)
-
-      const dt = 0.08;
-      const spd = getSpeedDegSec();
-      const vecMap = { X: vx, Y: vy, Z: vz, A: va };
-      const parts = [];
-      let magSq = 0;
-
-      ['X', 'Y', 'Z', 'A'].forEach(ax => {
-        const v = vecMap[ax];
-        if (v === 0) return;
-        const j = JOINTS.find(item => item.id === ax);
-        if (!j.enabled) toggleAxisEnabled(ax, true);
-        j.val = Math.max(j.min, Math.min(j.max, Number((j.val + v * spd * dt).toFixed(2))));
-        const sl = document.getElementById(`slider-${ax}`);
-        const vl = document.getElementById(`val-${ax}`);
-        if (sl) sl.value = j.val;
-        if (vl) vl.textContent = `${Math.round(j.val)}°`;
-
-        const hw = Number(hwAngle(j, j.val).toFixed(2));
-        projTarget[ax] = hw;
-        parts.push(`${ax}${hw}`);
-        magSq += (v * spd) * (v * spd);
-      });
-
-      if (!parts.length) return;
-      const vecFeed = Math.round(Math.sqrt(magSq) * 60);
-
-      if (!writer) return; // Offline telemetry updates via projTarget above!
-      vectorInFlight++;
-      sendAndWait(`G1 ${parts.join(' ')} F${vecFeed}`, 3000).finally(() => {
-        vectorInFlight = Math.max(0, vectorInFlight - 1);
-      });
-    }, 75);
 
     // --- SERIAL CONNECTION ---
     async function connectSerial() {
@@ -1356,6 +1392,25 @@
             }
             if (/^[XYZI]:\d+.*\|/.test(l) || l.startsWith('axis:pwm_scale')) {
               return;
+            }
+            // Parse M114 position sync reply (e.g. "X:12.50 Y:-30.00 Z:0.00 A:0.00 Count ...")
+            const m114 = l.match(/^X:(-?\d+\.?\d*)\s+Y:(-?\d+\.?\d*)\s+Z:(-?\d+\.?\d*)\s+A:(-?\d+\.?\d*)/);
+            if (m114) {
+              const coords = { X: Number(m114[1]), Y: Number(m114[2]), Z: Number(m114[3]), A: Number(m114[4]) };
+              ['X', 'Y', 'Z', 'A'].forEach(ax => {
+                measPos[ax] = coords[ax];
+                projPos[ax] = coords[ax];
+                projTarget[ax] = coords[ax];
+                const j = JOINTS.find(it => it.id === ax);
+                if (j) {
+                  const uiVal = Math.round(j.invert ? -coords[ax] : coords[ax]);
+                  j.val = Math.max(j.min, Math.min(j.max, uiVal));
+                  const sl = document.getElementById(`slider-${ax}`);
+                  const vl = document.getElementById(`val-${ax}`);
+                  if (sl) sl.value = j.val;
+                  if (vl) vl.textContent = `${j.val}°`;
+                }
+              });
             }
             log('<< ' + l, 'rx');
             if (l.startsWith('ok') && okResolvers.length > 0) {
