@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ENDER-ARM // Control & Telemetry</title>
+  <title>ENDER-ARM // Real-Time Control & Resistance Telemetry</title>
   <style>
     :root {
       --bg: #070707;
@@ -14,7 +14,7 @@
       --white: #f5f5f5;
       --muted: #808080;
       --red: #e52521;
-      --red-dim: rgba(229, 37, 33, 0.14);
+      --red-dim: rgba(229, 37, 33, 0.16);
       --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
     }
 
@@ -41,7 +41,7 @@
       border-bottom: 1px solid var(--border);
       margin-bottom: 18px;
     }
-    .brand { display: flex; align-items: center; gap: 14px; }
+    .brand { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     .brand-title { font-size: 14px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
     .brand-title span { color: var(--red); }
     .status-pill {
@@ -49,7 +49,7 @@
       align-items: center;
       gap: 7px;
       font-family: var(--mono);
-      font-size: 11px;
+      font-size: 10px;
       letter-spacing: 0.06em;
       text-transform: uppercase;
       padding: 4px 10px;
@@ -60,6 +60,7 @@
     .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #444; }
     .status-pill.online { color: var(--white); border-color: var(--border-hi); }
     .status-pill.online .status-dot { background: var(--red); box-shadow: 0 0 8px var(--red); }
+    .status-pill.warn { border-color: var(--red); color: var(--red); }
 
     .toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 
@@ -89,7 +90,7 @@
 
     .layout {
       display: grid;
-      grid-template-columns: 1.08fr 0.92fr;
+      grid-template-columns: 1.05fr 0.95fr;
       gap: 18px;
       align-items: start;
     }
@@ -134,7 +135,6 @@
     .muted { color: var(--muted); font-size: 11px; }
     .mono { font-family: var(--mono); }
 
-    /* TABS */
     .motor-tabs, .graph-tabs {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -144,11 +144,11 @@
       background: var(--bg);
       color: var(--muted);
       border: 1px solid var(--border);
-      padding: 8px 6px;
+      padding: 8px 5px;
       text-align: center;
       font-size: 10px;
       font-weight: 700;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.05em;
       text-transform: uppercase;
       cursor: pointer;
     }
@@ -250,7 +250,7 @@
       position: relative;
       background: #050505;
       border: 1px solid var(--border);
-      height: 220px;
+      height: 235px;
       width: 100%;
     }
     canvas#telemetryCanvas {
@@ -273,7 +273,7 @@
       flex-direction: column;
       gap: 2px;
     }
-    .metric-lbl { color: var(--muted); font-size: 9px; letter-spacing: 0.06em; }
+    .metric-lbl { color: var(--muted); font-size: 9px; letter-spacing: 0.05em; }
     .metric-val { color: var(--white); font-weight: 700; font-size: 11px; }
     .metric-val.accent-txt { color: var(--red); }
 
@@ -290,7 +290,7 @@
     summary:hover { color: var(--white); }
     .drawer-body { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
 
-    .routine-list { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; }
+    .routine-list { display: flex; flex-direction: column; gap: 6px; max-height: 195px; overflow-y: auto; }
     .routine-item {
       background: var(--bg);
       border: 1px solid var(--border);
@@ -308,7 +308,7 @@
       background: #050505;
       border: 1px solid var(--border);
       padding: 10px;
-      height: 145px;
+      height: 135px;
       overflow-y: auto;
       font-family: var(--mono);
       font-size: 11px;
@@ -340,6 +340,9 @@
         <span class="status-dot"></span>
         <span id="statusText">OFFLINE</span>
       </div>
+      <div id="telemPill" class="status-pill">
+        <span id="telemText">SENSOR: SIMULATED</span>
+      </div>
     </div>
 
     <div class="toolbar">
@@ -365,9 +368,9 @@
           <div class="panel-title">Single-Axis Jog</div>
           <div class="row">
             <span class="muted">SPEED</span>
-            <input id="speedInput" type="range" min="5" max="220" value="50" style="width:100px;"
+            <input id="speedInput" type="range" min="10" max="220" value="55" style="width:100px;"
               oninput="document.getElementById('speedLbl').textContent = this.value + ' °/s'" />
-            <span id="speedLbl" class="mono" style="width:52px; text-align:right; font-size:11px;">50 °/s</span>
+            <span id="speedLbl" class="mono" style="width:52px; text-align:right; font-size:11px;">55 °/s</span>
           </div>
         </div>
 
@@ -399,7 +402,7 @@
         </div>
 
         <div class="row">
-          <input id="customDeg" type="number" value="180" style="width:84px;" />
+          <input id="customDeg" type="number" value="360" style="width:84px;" />
           <button class="sm" onclick="quickSpin(-Number(document.getElementById('customDeg').value))">Spin -</button>
           <button class="sm primary" onclick="quickSpin(Number(document.getElementById('customDeg').value))">Spin +</button>
           <span class="spacer"></span>
@@ -430,20 +433,20 @@
           <summary>System, Driver &amp; Gear Configuration</summary>
           <div class="drawer-body">
             <div class="row">
-              <button class="sm" onclick="sendCmd('M569 S1 X Y Z A')">Quiet [StealthChop]</button>
-              <button class="sm" onclick="sendCmd('M569 S0 X Y Z A')">Torque [SpreadCycle]</button>
+              <button class="sm" onclick="sendCmd('M569 S1 X Y Z A')">StealthChop [Req. for StallGuard]</button>
+              <button class="sm" onclick="sendCmd('M569 S0 X Y Z A')">SpreadCycle [Max Torque]</button>
               <button class="sm" onclick="setDriveSteps('bench')">1:1 Bench Steps</button>
               <button class="sm" onclick="setDriveSteps('geared')">4:1 Geared Steps</button>
             </div>
             <div class="row">
               <button class="sm" onclick="setMotorCurrentPrompt()">Set Current [M906]</button>
               <button class="sm" onclick="setAccelPrompt()">Set Accel [M204]</button>
-              <button class="sm" onclick="sendCmd('M84 S0')">Disable Idle Timeout</button>
+              <button class="sm" onclick="calibrateBaseline()">Zero Load Baseline</button>
               <button class="sm" onclick="sendCmd('M500')">Save EEPROM [M500]</button>
             </div>
             <div class="row">
               <button id="kbdBtn" class="sm" onclick="toggleKeyboardMode()">Keyboard Jog: OFF</button>
-              <button class="sm" onclick="sendCmd('M114')">Pos [M114]</button>
+              <button class="sm" onclick="sendCmd('M122 P150 Q')">Start Stream</button>
               <button class="sm" onclick="sendCmd('M119')">Endstops [M119]</button>
               <button class="sm" onclick="sendCmd('M122')">Drivers [M122]</button>
               <button class="sm outline-red" onclick="rebootBoard()">Reboot MCU [M997]</button>
@@ -454,13 +457,13 @@
       </div>
     </div>
 
-    <!-- RIGHT COLUMN: TELEMETRY GRAPHS, ROUTINES & TERMINAL -->
+    <!-- RIGHT COLUMN: LIVE VS PROJECTED TELEMETRY, ROUTINES & TERMINAL -->
     <div class="col">
-      <!-- 4-MODE TELEMETRY & ANALYTICS -->
       <div class="panel">
         <div class="panel-head">
-          <div class="panel-title">Telemetry &amp; Motion Analytics</div>
+          <div class="panel-title">Live Measured vs. Projected</div>
           <div class="row">
+            <button class="sm" onclick="calibrateBaseline()" title="Re-baseline unloaded free-spin StallGuard reading">Calibrate</button>
             <button id="pauseGraphBtn" class="sm" onclick="toggleGraphPause()">Freeze</button>
             <button class="sm" onclick="clearTelemetry()">Clear</button>
             <button class="sm" onclick="exportTelemetryCSV()">CSV</button>
@@ -468,10 +471,10 @@
         </div>
 
         <div class="graph-tabs" id="graphTabs">
-          <div class="tab active" onclick="setGraphMode('trajectory', this)">01 Trajectory</div>
-          <div class="tab" onclick="setGraphMode('kinematics', this)">02 Vel / Accel</div>
-          <div class="tab" onclick="setGraphMode('workspace', this)">03 Workspace</div>
-          <div class="tab" onclick="setGraphMode('load', this)">04 Load &amp; I/O</div>
+          <div class="tab active" onclick="setGraphMode('resistance', this)">01 Resistance</div>
+          <div class="tab" onclick="setGraphMode('trajectory', this)">02 Position</div>
+          <div class="tab" onclick="setGraphMode('velocity', this)">03 Velocity</div>
+          <div class="tab" onclick="setGraphMode('workspace', this)">04 2D Ghost</div>
         </div>
 
         <div class="canvas-wrap">
@@ -480,21 +483,28 @@
 
         <div class="telemetry-metrics">
           <div class="metric-cell">
-            <span class="metric-lbl">PEAK VELOCITY</span>
-            <span id="mPeakVel" class="metric-val">0.0 °/s</span>
+            <span class="metric-lbl">AXIS / STALLGUARD</span>
+            <span id="mSgRaw" class="metric-val">J1 [X] // SG: --</span>
           </div>
           <div class="metric-cell">
-            <span class="metric-lbl">TIP REACH (R, Z)</span>
-            <span id="mTipPos" class="metric-val">155, 212 mm</span>
+            <span class="metric-lbl">MEASURED vs PROJ LOAD</span>
+            <span id="mLoadCmp" class="metric-val">0% vs 0%</span>
           </div>
           <div class="metric-cell">
-            <span class="metric-lbl">SHLDR TORQUE EST</span>
-            <span id="mTorque" class="metric-val accent-txt">0.18 N·m</span>
+            <span class="metric-lbl">RESISTANCE DELTA</span>
+            <span id="mDelta" class="metric-val accent-txt">+0.0% NOMINAL</span>
           </div>
           <div class="metric-cell">
-            <span class="metric-lbl">SERIAL RTT / CMDS</span>
-            <span id="mSerial" class="metric-val">-- ms / 0</span>
+            <span class="metric-lbl">POS TRACKING LAG</span>
+            <span id="mLag" class="metric-val">0.0°</span>
           </div>
+        </div>
+
+        <div id="simDragRow" class="row" style="padding-top:2px;">
+          <span class="muted">TEST DRAG SIMULATOR (OFFLINE PREVIEW):</span>
+          <input id="simDragSlider" type="range" min="0" max="85" value="0"
+            oninput="document.getElementById('simDragVal').textContent = '+' + this.value + '%'" />
+          <span id="simDragVal" class="mono muted" style="width:36px; text-align:right;">+0%</span>
         </div>
       </div>
 
@@ -536,7 +546,7 @@
         <div id="console" class="terminal"></div>
 
         <div class="row">
-          <input id="gcodeInput" type="text" style="flex:1;" placeholder="Enter G-code (e.g. G1 X90 F3000)..." />
+          <input id="gcodeInput" type="text" style="flex:1;" placeholder="Enter G-code (e.g. G1 X360 F3000)..." />
           <button class="primary" onclick="sendManualGcode()">Send</button>
         </div>
       </div>
@@ -545,16 +555,16 @@
 
   <script>
     const JOINTS = [
-      { id: 'X', name: 'J1 Base [XM]',     min: -180, max: 180, val: 0,  simPos: 0,  enabled: true,  invert: false },
-      { id: 'Y', name: 'J2 Shoulder [YM]', min: -90,  max: 135, val: 0,  simPos: 18, enabled: true,  invert: false },
-      { id: 'Z', name: 'J3 Elbow [ZAM]',   min: -135, max: 135, val: 0,  simPos: 10, enabled: false, invert: false },
-      { id: 'A', name: 'J4 Wrist [EM]',    min: -180, max: 180, val: 0,  simPos: 0,  enabled: false, invert: false },
-      { id: 'G', name: 'Gripper [SERVO]',  min: 10,   max: 170, val: 90, simPos: 90, enabled: true,  invert: false }
+      { id: 'X', name: 'J1 Base [XM]',     min: -180, max: 180, val: 0,  enabled: true,  invert: false },
+      { id: 'Y', name: 'J2 Shoulder [YM]', min: -90,  max: 135, val: 0,  enabled: true,  invert: false },
+      { id: 'Z', name: 'J3 Elbow [ZAM]',   min: -135, max: 135, val: 0,  enabled: false, invert: false },
+      { id: 'A', name: 'J4 Wrist [EM]',    min: -180, max: 180, val: 0,  enabled: false, invert: false },
+      { id: 'G', name: 'Gripper [SERVO]',  min: 10,   max: 170, val: 90, enabled: true,  invert: false }
     ];
 
     const DEFAULT_APPS = [
       { id: 'home-0', name: 'Home Origin (0 deg)', gcode: 'G90\nG1 X0 Y0 F3000\nM280 P0 S90\nM400' },
-      { id: 'sync-xy', name: 'Dual-Axis Test [X+Y]', gcode: 'G90\nG92 X0 Y0\nG1 X90 Y45 F3600\nM400\nG1 X-90 Y-45 F3600\nM400\nG1 X0 Y0 F3600\nM400' }
+      { id: 'sync-xy', name: 'Dual-Axis Test [X+Y]', gcode: 'G90\nG92 X0 Y0\nG1 X180 Y90 F3300\nM400\nG1 X0 Y0 F3300\nM400' }
     ];
 
     let port = null, writer = null, reader = null;
@@ -568,22 +578,29 @@
     let okResolvers = [];
     let liveDragTimer = null;
 
-    // --- TELEMETRY ENGINE STATE ---
-    let graphMode = 'trajectory'; // 'trajectory' | 'kinematics' | 'workspace' | 'load'
+    // --- REAL-TIME HARDWARE vs PROJECTED MODEL STATE ---
+    let graphMode = 'resistance'; // 'resistance' | 'trajectory' | 'velocity' | 'workspace'
     let graphPaused = false;
-    const MAX_SAMPLES = 240; // ~12 seconds at 20 Hz
-    let telemetry = [];      // { t, x, y, z, a, vel, acc, r_mm, z_mm, trq, rtt }
-    let tipTrail = [];       // last 90 (r, z) points in mm
-    let peakVel = 0;
-    let lastVel = 0;
-    let cmdCount = 0;
-    let lastTxTime = 0;
-    let lastRttMs = 0;
-    let rttHistory = [];
+    let hasHardwareStream = false;
+    let lastTelemRxMs = 0;
 
-    // Targets for smooth kinematic interpolation on the graphs (including relative quickSpin!)
-    const simTarget = { X: 0, Y: 0, Z: 0, A: 0 };
-    const simCurrent = { X: 0, Y: 0, Z: 0, A: 0 };
+    // Projected (ideal kinematic model)
+    const projTarget = { X: 0, Y: 0, Z: 0, A: 0 };
+    const projPos    = { X: 0, Y: 0, Z: 0, A: 0 };
+    const projVel    = { X: 0, Y: 0, Z: 0, A: 0 };
+
+    // Measured (real-time from @TELEM hardware ISR + TMC2209 StallGuard4 & PWM_SCALE)
+    const measPos    = { X: 0, Y: 0, Z: 0, A: 0 };
+    const prevMeasPos= { X: 0, Y: 0, Z: 0, A: 0 };
+    const measVel    = { X: 0, Y: 0, Z: 0, A: 0 };
+    const hwSG       = { X: 0, Y: 0, Z: 0, A: 0 };
+    const hwPWM      = { X: 0, Y: 0, Z: 0, A: 0 };
+    // Rolling peak unloaded SG baseline per motor (auto-learns free-spin back-EMF!)
+    const sgBaseline = { X: 180, Y: 180, Z: 180, A: 180 };
+    const pwmBaseline= { X: 35,  Y: 35,  Z: 35,  A: 35  };
+
+    const MAX_SAMPLES = 220; // ~11 seconds at 20 Hz
+    let telemetry = [];
 
     let apps = JSON.parse(localStorage.getItem('ender_arm_apps_v2') || localStorage.getItem('ender_arm_apps') || 'null') || DEFAULT_APPS;
 
@@ -609,7 +626,7 @@
       line.className = cls;
       line.textContent = msg;
       el.appendChild(line);
-      if (el.childNodes.length > 200) el.removeChild(el.firstChild);
+      if (el.childNodes.length > 180) el.removeChild(el.firstChild);
       el.scrollTop = el.scrollHeight;
     }
 
@@ -644,7 +661,7 @@
     }
 
     function getSpeedDegSec() {
-      return Number(document.getElementById('speedInput').value || 50);
+      return Number(document.getElementById('speedInput').value || 55);
     }
     function getFeedrate() {
       return Math.round(getSpeedDegSec() * 60);
@@ -653,21 +670,34 @@
       return (j.id !== 'G' && j.invert) ? -val : val;
     }
 
-    // Track G-code motion targets so graphs reflect quickSpin, sliders, manual G-code, and routines!
+    function calibrateBaseline() {
+      ['X', 'Y', 'Z', 'A'].forEach(ax => {
+        if (hwSG[ax] > 20) sgBaseline[ax] = hwSG[ax];
+        else sgBaseline[ax] = 160;
+        if (hwPWM[ax] > 5) pwmBaseline[ax] = hwPWM[ax];
+      });
+      log('LOAD BASELINE RE-CALIBRATED FOR FREE SPIN');
+    }
+
+    // Parse outbound G-code to drive the PROJECTED kinematic model
     let simRelative = false;
-    function interceptGcodeForTelemetry(cmd) {
+    function interceptProjectedGcode(cmd) {
       const up = cmd.toUpperCase().trim();
       if (up.startsWith('G91')) { simRelative = true; return; }
       if (up.startsWith('G90')) { simRelative = false; return; }
       if (up.startsWith('G92')) {
         ['X', 'Y', 'Z', 'A'].forEach(ax => {
           const m = up.match(new RegExp(ax + '(-?\\d+\\.?\\d*)'));
-          if (m) { simTarget[ax] = Number(m[1]); simCurrent[ax] = Number(m[1]); }
+          if (m) {
+            const v = Number(m[1]);
+            projTarget[ax] = v; projPos[ax] = v;
+            if (!hasHardwareStream) measPos[ax] = v;
+          }
         });
         return;
       }
       if (up.startsWith('M410')) {
-        ['X', 'Y', 'Z', 'A'].forEach(ax => { simTarget[ax] = simCurrent[ax]; });
+        ['X', 'Y', 'Z', 'A'].forEach(ax => { projTarget[ax] = projPos[ax]; });
         return;
       }
       if (up.startsWith('G0') || up.startsWith('G1')) {
@@ -675,10 +705,46 @@
           const m = up.match(new RegExp(ax + '(-?\\d+\\.?\\d*)'));
           if (m) {
             const v = Number(m[1]);
-            simTarget[ax] = simRelative ? (simTarget[ax] + v) : v;
+            projTarget[ax] = simRelative ? (projTarget[ax] + v) : v;
           }
         });
       }
+    }
+
+    // Parse inbound @TELEM packet from Marlin SKR Mini E3 V3.0
+    function parseHardwareTelem(line) {
+      // Format: @TELEM X:12.34 Y:0.00 Z:0.00 A:0.00 SGX:310 SGY:0 SGZ:0 SGA:0 PWX:42 PWY:30
+      const now = performance.now();
+      const dt = lastTelemRxMs > 0 ? Math.max(0.04, (now - lastTelemRxMs) / 1000) : 0.15;
+      lastTelemRxMs = now;
+
+      if (!hasHardwareStream) {
+        hasHardwareStream = true;
+        const pill = document.getElementById('telemPill');
+        pill.classList.add('online');
+        document.getElementById('telemText').textContent = 'SENSOR: LIVE TMC2209';
+        document.getElementById('simDragRow').style.display = 'none';
+      }
+
+      ['X', 'Y', 'Z', 'A'].forEach(ax => {
+        const mp = line.match(new RegExp('\\b' + ax + ':(-?\\d+\\.?\\d*)'));
+        if (mp) {
+          const newP = Number(mp[1]);
+          measVel[ax] = Math.abs(newP - measPos[ax]) / dt;
+          measPos[ax] = newP;
+        }
+        const ms = line.match(new RegExp('SG' + ax + ':(\\d+)'));
+        if (ms) {
+          const sg = Number(ms[1]);
+          hwSG[ax] = sg;
+          // Gently adapt unloaded ceiling upward if motor spins freer at current speed
+          if (measVel[ax] > 8 && sg > sgBaseline[ax]) {
+            sgBaseline[ax] = sgBaseline[ax] * 0.85 + sg * 0.15;
+          }
+        }
+        const mw = line.match(new RegExp('PW' + ax + ':(\\d+)'));
+        if (mw) hwPWM[ax] = Number(mw[1]);
+      });
     }
 
     // --- JOG, HOLD, SWEEP, STOP & RESET ---
@@ -695,11 +761,11 @@
       stopHoldSpin();
       if (btn) btn.classList.add('holding');
       const spd = getSpeedDegSec();
-      const chunk = Math.max(2, Math.round(spd * 0.18)) * dir;
+      const chunk = Math.max(3, Math.round(spd * 0.2)) * dir;
       quickSpin(chunk);
       holdInterval = setInterval(() => {
         if (okResolvers.length < 3) quickSpin(chunk);
-      }, 150);
+      }, 160);
     }
 
     async function stopHoldSpin(btn) {
@@ -707,7 +773,7 @@
       if (holdInterval) {
         clearInterval(holdInterval);
         holdInterval = null;
-        ['X', 'Y', 'Z', 'A'].forEach(ax => { simTarget[ax] = simCurrent[ax]; });
+        ['X', 'Y', 'Z', 'A'].forEach(ax => { projTarget[ax] = projPos[ax]; });
         if (writer) await sendCmd('M410');
       }
     }
@@ -721,7 +787,7 @@
         await quickStop();
         return;
       }
-      const amp = Math.abs(Number(document.getElementById('customDeg').value || 90));
+      const amp = Math.abs(Number(document.getElementById('customDeg').value || 180));
       sweepRunning = true;
       btn.textContent = 'Stop Sweep';
       btn.classList.add('active');
@@ -745,7 +811,7 @@
       routineAbort = true;
       if (holdInterval) { clearInterval(holdInterval); holdInterval = null; }
       okResolvers.splice(0).forEach(r => r());
-      ['X', 'Y', 'Z', 'A'].forEach(ax => { simTarget[ax] = simCurrent[ax]; });
+      ['X', 'Y', 'Z', 'A'].forEach(ax => { projTarget[ax] = hasHardwareStream ? measPos[ax] : projPos[ax]; });
       if (writer) {
         await sendCmd('M410');
         await sendCmd('G90');
@@ -762,14 +828,14 @@
       document.getElementById('sweepBtn').classList.remove('active');
       document.getElementById('routineStatusRow').style.display = 'none';
       JOINTS.forEach(j => { j.val = j.id === 'G' ? 90 : 0; });
-      ['X', 'Y', 'Z', 'A'].forEach(ax => { simTarget[ax] = 0; simCurrent[ax] = 0; });
-      peakVel = 0;
+      ['X', 'Y', 'Z', 'A'].forEach(ax => { projTarget[ax] = 0; projPos[ax] = 0; measPos[ax] = 0; });
       renderJoints();
       if (writer) {
         await sendCmd('M999');
         await sendCmd('M410');
         await sendCmd('G90');
         await sendCmd('G92 X0 Y0 Z0 A0');
+        await sendCmd('M122 P150 Q');
       }
       log('SYSTEM RESET COMPLETE [M999 / G90 / G92]');
     }
@@ -836,7 +902,7 @@
     async function zeroSingle(id) {
       const j = JOINTS.find(x => x.id === id);
       j.val = id === 'G' ? 90 : 0;
-      if (id !== 'G') { simTarget[id] = 0; simCurrent[id] = 0; }
+      if (id !== 'G') { projTarget[id] = 0; projPos[id] = 0; measPos[id] = 0; }
       renderJoints();
       if (!writer) return;
       if (id === 'G') await sendCmd('M280 P0 S90');
@@ -847,7 +913,7 @@
       const j = JOINTS.find(x => x.id === id);
       j.val = Number(val);
       document.getElementById(`val-${id}`).textContent = `${j.val}°`;
-      if (id !== 'G' && j.enabled) simTarget[id] = hwAngle(j, j.val);
+      if (id !== 'G' && j.enabled) projTarget[id] = hwAngle(j, j.val);
       if (liveFollow && writer && j.enabled) {
         if (liveDragTimer) clearTimeout(liveDragTimer);
         liveDragTimer = setTimeout(() => sendSingleJoint(j), 80);
@@ -856,7 +922,7 @@
 
     async function sendSingleJoint(j) {
       if (!j.enabled) return;
-      if (j.id !== 'G') simTarget[j.id] = hwAngle(j, j.val);
+      if (j.id !== 'G') projTarget[j.id] = hwAngle(j, j.val);
       if (!writer) return;
       if (j.id === 'G') await sendCmd(`M280 P0 S${j.val}`);
       else {
@@ -883,7 +949,7 @@
 
     async function resetPoseZero() {
       JOINTS.forEach(j => { j.val = j.id === 'G' ? 90 : 0; });
-      ['X', 'Y', 'Z', 'A'].forEach(ax => { simTarget[ax] = 0; });
+      ['X', 'Y', 'Z', 'A'].forEach(ax => { projTarget[ax] = 0; });
       renderJoints();
       if (writer) await sendAllEnabledJoints();
     }
@@ -893,7 +959,7 @@
       JOINTS.forEach(j => {
         if (j.enabled && j.id !== 'G') {
           const hw = hwAngle(j, j.val);
-          simTarget[j.id] = hw;
+          projTarget[j.id] = hw;
           parts.push(`${j.id}${hw}`);
         }
       });
@@ -907,7 +973,7 @@
     }
 
     async function sendZero() {
-      ['X', 'Y', 'Z', 'A'].forEach(ax => { simTarget[ax] = 0; simCurrent[ax] = 0; });
+      ['X', 'Y', 'Z', 'A'].forEach(ax => { projTarget[ax] = 0; projPos[ax] = 0; measPos[ax] = 0; });
       JOINTS.forEach(j => { if (j.id !== 'G') j.val = 0; });
       renderJoints();
       if (writer) await sendCmd('G92 X0 Y0 Z0 A0');
@@ -969,12 +1035,22 @@
         document.getElementById('statusText').textContent = 'ONLINE // 115200';
         document.getElementById('connectBtn').textContent = 'Connected';
         document.getElementById('connectBtn').classList.remove('primary');
+        document.getElementById('telemText').textContent = 'PROBING TELEMETRY...';
         log('LINK ESTABLISHED: SKR MINI E3 V3.0');
         readLoop();
         await writer.write(new TextEncoder().encode('\n'));
         await new Promise(r => setTimeout(r, 150));
         await sendCmd('G90');
         await sendCmd('M84 S0');
+        await sendCmd('M569 S1 X Y Z A'); // StealthChop enables StallGuard4 SG_RESULT!
+        await sendCmd('M122 P150 Q');     // Start 6.7Hz @TELEM hardware stream!
+        setTimeout(() => {
+          if (!hasHardwareStream && writer) {
+            document.getElementById('telemPill').classList.add('warn');
+            document.getElementById('telemText').textContent = 'FLASH NEW FIRMWARE.BIN FOR STALLGUARD';
+            log('NOTE: Flash updated firmware.bin to microSD to enable live TMC2209 StallGuard resistance streaming.');
+          }
+        }, 1800);
       } catch (err) {
         log('CONNECTION ERROR: ' + err.message);
       }
@@ -995,22 +1071,29 @@
           lines.forEach(raw => {
             const l = raw.trim();
             if (!l) return;
+            // Intercept high-rate @TELEM & periodic driver lines silently so console stays clean!
+            if (l.startsWith('@TELEM')) {
+              parseHardwareTelem(l);
+              return;
+            }
+            if (/^[XYZI]:\d+.*\|/.test(l) || l.startsWith('axis:pwm_scale')) {
+              return;
+            }
             log('<< ' + l, 'rx');
-            if (l.startsWith('ok')) {
-              if (lastTxTime > 0) {
-                lastRttMs = Math.max(1, Math.round(performance.now() - lastTxTime));
-                rttHistory.push(lastRttMs);
-                if (rttHistory.length > 40) rttHistory.shift();
-              }
-              if (okResolvers.length > 0) okResolvers.shift()();
+            if (l.startsWith('ok') && okResolvers.length > 0) {
+              okResolvers.shift()();
             }
           });
         }
       } catch (err) {
         document.getElementById('statusPill').classList.remove('online');
         document.getElementById('statusText').textContent = 'OFFLINE';
+        document.getElementById('telemPill').classList.remove('online', 'warn');
+        document.getElementById('telemText').textContent = 'SENSOR: SIMULATED';
+        document.getElementById('simDragRow').style.display = 'flex';
         document.getElementById('connectBtn').textContent = 'Connect USB';
         document.getElementById('connectBtn').classList.add('primary');
+        hasHardwareStream = false;
         writer = null;
         log('DISCONNECTED: ' + err.message);
       }
@@ -1019,11 +1102,9 @@
     async function sendCmd(cmd) {
       const clean = cmd.split(';')[0].trim();
       if (!clean) return;
-      interceptGcodeForTelemetry(clean);
-      if (!writer) { log('OFFLINE [SIMULATED]: ' + clean); return; }
-      cmdCount++;
-      lastTxTime = performance.now();
-      log('>> ' + clean, 'tx');
+      interceptProjectedGcode(clean);
+      if (!writer) { log('SIMULATED: ' + clean); return; }
+      if (!clean.startsWith('M122 P')) log('>> ' + clean, 'tx');
       await writer.write(new TextEncoder().encode(clean + '\n'));
     }
 
@@ -1047,7 +1128,7 @@
     document.getElementById('connectBtn').addEventListener('click', connectSerial);
 
     // =========================================================================
-    // 4-MODE TELEMETRY & ANALYTICS ENGINE (20 Hz Physics + 60 FPS HiDPI Canvas)
+    // LIVE MEASURED vs PROJECTED TELEMETRY ENGINE (20 Hz Sample + 60 FPS Canvas)
     // =========================================================================
     function setGraphMode(mode, tabEl) {
       graphMode = mode;
@@ -1064,79 +1145,108 @@
 
     function clearTelemetry() {
       telemetry = [];
-      tipTrail = [];
-      rttHistory = [];
-      peakVel = 0;
     }
 
     function exportTelemetryCSV() {
       if (!telemetry.length) { alert('No telemetry recorded yet.'); return; }
-      const header = 'time_s,j1_deg,j2_deg,j3_deg,j4_deg,vel_deg_s,acc_deg_s2,reach_mm,height_mm,shldr_torque_Nm,rtt_ms\n';
+      const header = 'time_s,axis,proj_pos_deg,meas_pos_deg,proj_vel,meas_vel,proj_load_pct,meas_load_pct,sg_raw\n';
       const rows = telemetry.map(s =>
-        `${s.t.toFixed(2)},${s.x.toFixed(1)},${s.y.toFixed(1)},${s.z.toFixed(1)},${s.a.toFixed(1)},${s.vel.toFixed(1)},${s.acc.toFixed(1)},${s.r_mm.toFixed(1)},${s.z_mm.toFixed(1)},${s.trq.toFixed(3)},${s.rtt}`
+        `${s.t.toFixed(2)},${s.ax},${s.pPos.toFixed(1)},${s.mPos.toFixed(1)},${s.pVel.toFixed(1)},${s.mVel.toFixed(1)},${s.pLoad.toFixed(1)},${s.mLoad.toFixed(1)},${s.sg}`
       ).join('\n');
       const blob = new Blob([header + rows], { type: 'text/csv' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = 'ender-arm-telemetry.csv';
+      a.download = 'ender-arm-live-vs-projected.csv';
       a.click();
     }
 
-    // Forward Kinematics (Base=105mm, Upper=135mm, Forearm+Gripper=160mm)
-    function computeFK(j2Deg, j3Deg) {
-      const th1 = (18 + j2Deg) * Math.PI / 180; // 18 deg natural cobot lean at 0
+    function fk2D(j2Deg, j3Deg) {
+      const th1 = (18 + j2Deg) * Math.PI / 180;
       const th2 = th1 + (72 + j3Deg) * Math.PI / 180;
       const elbR = 135 * Math.sin(th1);
       const elbZ = 105 + 135 * Math.cos(th1);
       const tipR = elbR + 160 * Math.sin(th2);
       const tipZ = elbZ + 160 * Math.cos(th2);
-      // Gravity torque estimate on J2 Shoulder (N.m) assuming ~0.28kg upper+forearm+gripper
-      const trq = Math.abs(0.14 * 9.81 * (0.068 * Math.sin(th1)) + 0.16 * 9.81 * ((tipR * 0.65) / 1000));
-      return { elbR, elbZ, tipR, tipZ, trq };
+      return { elbR, elbZ, tipR, tipZ };
     }
 
     const t0 = performance.now();
     setInterval(() => {
       if (graphPaused) return;
-      const dt = 0.05; // 20 Hz sample rate
-      const maxStep = getSpeedDegSec() * dt;
-      let sumSqVel = 0;
+      const dt = 0.05;
+      const spd = getSpeedDegSec();
+      const maxStep = spd * dt;
+      const simDrag = Number(document.getElementById('simDragSlider').value || 0);
 
       ['X', 'Y', 'Z', 'A'].forEach(ax => {
-        const diff = simTarget[ax] - simCurrent[ax];
-        const move = Math.abs(diff) <= maxStep ? diff : Math.sign(diff) * maxStep;
-        const v = move / dt;
-        simCurrent[ax] += move;
-        sumSqVel += v * v;
+        const diff = projTarget[ax] - projPos[ax];
+        const step = Math.abs(diff) <= maxStep ? diff : Math.sign(diff) * maxStep;
+        projVel[ax] = Math.abs(step) / dt;
+        projPos[ax] += step;
+
+        if (!hasHardwareStream) {
+          // Offline / legacy preview: simulate slight physical inertia + optional test drag
+          const dragFactor = 1 - (simDrag / 130);
+          const mDiff = projPos[ax] - measPos[ax];
+          const mStep = mDiff * 0.42 * dragFactor;
+          measVel[ax] = Math.abs(mStep) / dt;
+          measPos[ax] += mStep;
+        }
       });
 
-      const vel = Math.sqrt(sumSqVel);
-      if (vel > peakVel) peakVel = vel;
-      const acc = (vel - lastVel) / dt;
-      lastVel = vel;
+      const ax = selectedMotor;
+      const isMoving = projVel[ax] > 2 || measVel[ax] > 2;
 
-      const fk = computeFK(simCurrent.Y, simCurrent.Z);
-      const nowS = (performance.now() - t0) / 1000;
+      // Projected nominal load % (base coil + dynamic velocity/gravity component)
+      const gravPct = ax === 'Y' ? Math.abs(Math.sin((18 + projPos.Y) * Math.PI / 180)) * 22 : (ax === 'Z' ? 12 : 6);
+      const projLoad = isMoving ? Math.min(85, 16 + gravPct + (projVel[ax] / 220) * 18) : (6 + gravPct * 0.6);
+
+      // Measured load % from real TMC2209 StallGuard4 SG_RESULT + PWM_SCALE!
+      let measLoad = projLoad;
+      if (hasHardwareStream) {
+        const sg = hwSG[ax];
+        const base = Math.max(60, sgBaseline[ax]);
+        if (measVel[ax] > 4 || projVel[ax] > 4) {
+          // StallGuard4: SG drops toward 0 as shaft resistance rises!
+          const sgDropPct = Math.max(0, (1 - (sg / base)) * 85);
+          // PWM auto-scale boost under load
+          const pwmBoost = Math.max(0, (hwPWM[ax] - pwmBaseline[ax]) * 0.6);
+          measLoad = Math.min(100, projLoad + sgDropPct + pwmBoost);
+        } else {
+          measLoad = projLoad;
+        }
+      } else {
+        measLoad = Math.min(100, projLoad + (isMoving ? simDrag : simDrag * 0.25));
+      }
+
+      const delta = measLoad - projLoad;
+      const lag = Math.abs(measPos[ax] - projPos[ax]);
 
       telemetry.push({
-        t: nowS,
-        x: simCurrent.X, y: simCurrent.Y, z: simCurrent.Z, a: simCurrent.A,
-        vel, acc,
-        r_mm: fk.tipR, z_mm: fk.tipZ,
-        elbR: fk.elbR, elbZ: fk.elbZ,
-        trq: fk.trq,
-        rtt: lastRttMs
+        t: (performance.now() - t0) / 1000,
+        ax,
+        pPos: projPos[ax],
+        mPos: measPos[ax],
+        pVel: projVel[ax],
+        mVel: measVel[ax],
+        pLoad: projLoad,
+        mLoad: measLoad,
+        sg: hwSG[ax]
       });
       if (telemetry.length > MAX_SAMPLES) telemetry.shift();
 
-      tipTrail.push({ r: fk.tipR, z: fk.tipZ });
-      if (tipTrail.length > 85) tipTrail.shift();
-
-      // Update live KPI cells
-      document.getElementById('mPeakVel').textContent = `${peakVel.toFixed(1)} °/s`;
-      document.getElementById('mTipPos').textContent = `${Math.round(fk.tipR)}, ${Math.round(fk.tipZ)} mm`;
-      document.getElementById('mTorque').textContent = `${fk.trq.toFixed(2)} N·m`;
-      document.getElementById('mSerial').textContent = `${lastRttMs || '--'} ms / ${cmdCount}`;
+      // Update KPI cells
+      document.getElementById('mSgRaw').textContent = `${ax} // SG: ${hasHardwareStream ? hwSG[ax] : 'SIM'}`;
+      document.getElementById('mLoadCmp').textContent = `${Math.round(measLoad)}% vs ${Math.round(projLoad)}%`;
+      const dEl = document.getElementById('mDelta');
+      if (delta > 15) {
+        dEl.textContent = `+${delta.toFixed(0)}% RESISTANCE!`;
+        dEl.style.color = '#e52521';
+      } else {
+        dEl.textContent = `${delta >= 0 ? '+' : ''}${delta.toFixed(0)}% NOMINAL`;
+        dEl.style.color = '#f5f5f5';
+      }
+      document.getElementById('mLag').textContent = `${lag.toFixed(1)}°`;
     }, 50);
 
     function drawTelemetryCanvas() {
@@ -1155,11 +1265,11 @@
       ctx.fillStyle = '#050505';
       ctx.fillRect(0, 0, W, H);
 
-      const padL = 42, padR = 14, padT = 22, padB = 22;
+      const padL = 44, padR = 14, padT = 24, padB = 20;
       const pw = W - padL - padR, ph = H - padT - padB;
 
-      // Subtle technical grid
-      ctx.strokeStyle = '#181818';
+      // Grid
+      ctx.strokeStyle = '#171717';
       ctx.lineWidth = 1;
       for (let i = 0; i <= 4; i++) {
         const gy = padT + (ph * i) / 4;
@@ -1172,189 +1282,196 @@
 
       ctx.font = '10px SFMono-Regular, Consolas, monospace';
 
-      if (graphMode === 'trajectory') {
-        // MODE 1: Multi-Axis Joint Trajectory (-180 to +180 deg)
+      if (graphMode === 'resistance') {
+        // GRAPH 1: REAL-TIME SHAFT RESISTANCE (SOLID RED) vs PROJECTED LOAD (DASHED WHITE)
+        ctx.fillStyle = '#f5f5f5';
+        ctx.fillText(`-- PROJECTED LOAD (%)`, padL, 14);
+        ctx.fillStyle = '#e52521';
+        ctx.fillText(`━━ MEASURED RESISTANCE [${selectedMotor}]`, padL + 150, 14);
+
         ctx.fillStyle = '#777';
-        ctx.fillText('+180°', 4, padT + 4);
-        ctx.fillText('  0°', 4, padT + ph / 2 + 3);
-        ctx.fillText('-180°', 4, padT + ph);
-
-        // Zero centerline
-        ctx.strokeStyle = '#2d2d2d';
-        ctx.beginPath(); ctx.moveTo(padL, padT + ph / 2); ctx.lineTo(padL + pw, padT + ph / 2); ctx.stroke();
-
-        // Legend
-        const leg = [['J1[X]', '#ffffff'], ['J2[Y]', '#e52521'], ['J3[Z]', '#8c8c8c'], ['J4[A]', '#4d4d4d']];
-        leg.forEach(([lbl, col], idx) => {
-          ctx.fillStyle = col;
-          ctx.fillText(`■ ${lbl}`, padL + idx * 68, 14);
-        });
-
-        const series = [
-          { key: 'x', col: '#ffffff', w: 1.8 },
-          { key: 'y', col: '#e52521', w: 1.8 },
-          { key: 'z', col: '#8c8c8c', w: 1.3 },
-          { key: 'a', col: '#4d4d4d', w: 1.2 }
-        ];
-        series.forEach(s => {
-          if (telemetry.length < 2) return;
-          ctx.strokeStyle = s.col;
-          ctx.lineWidth = s.w;
-          ctx.beginPath();
-          telemetry.forEach((pt, idx) => {
-            const px = padL + (idx / (MAX_SAMPLES - 1)) * pw;
-            const clamped = Math.max(-180, Math.min(180, pt[s.key]));
-            const py = padT + ph / 2 - (clamped / 180) * (ph / 2);
-            if (idx === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-          });
-          ctx.stroke();
-        });
-
-      } else if (graphMode === 'kinematics') {
-        // MODE 2: Angular Velocity (White area) & Acceleration (Red impulse)
-        const maxV = Math.max(120, peakVel * 1.15);
-        ctx.fillStyle = '#fff'; ctx.fillText('■ VELOCITY (°/s)', padL, 14);
-        ctx.fillStyle = '#e52521'; ctx.fillText('■ ACCEL (°/s²)', padL + 125, 14);
-        ctx.fillStyle = '#777';
-        ctx.fillText(`${Math.round(maxV)}`, 6, padT + 4);
-        ctx.fillText(`0`, 18, padT + ph);
+        ctx.fillText('100%', 6, padT + 4);
+        ctx.fillText(' 50%', 6, padT + ph / 2 + 3);
+        ctx.fillText('  0%', 6, padT + ph);
 
         if (telemetry.length >= 2) {
-          // Velocity filled curve
+          // Shaded red resistance-excess zone where Measured > Projected
+          ctx.fillStyle = 'rgba(229, 37, 33, 0.22)';
           ctx.beginPath();
-          telemetry.forEach((pt, idx) => {
-            const px = padL + (idx / (MAX_SAMPLES - 1)) * pw;
-            const py = padT + ph - Math.min(1, pt.vel / maxV) * ph;
-            if (idx === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+          telemetry.forEach((pt, i) => {
+            const px = padL + (i / (MAX_SAMPLES - 1)) * pw;
+            const py = padT + ph - (Math.max(pt.mLoad, pt.pLoad) / 100) * ph;
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
           });
-          const lastX = padL + ((telemetry.length - 1) / (MAX_SAMPLES - 1)) * pw;
-          ctx.lineTo(lastX, padT + ph);
-          ctx.lineTo(padL, padT + ph);
+          for (let i = telemetry.length - 1; i >= 0; i--) {
+            const px = padL + (i / (MAX_SAMPLES - 1)) * pw;
+            const py = padT + ph - (telemetry[i].pLoad / 100) * ph;
+            ctx.lineTo(px, py);
+          }
           ctx.closePath();
-          ctx.fillStyle = 'rgba(255,255,255,0.08)';
           ctx.fill();
 
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 1.8;
+          // Projected dashed white
+          ctx.strokeStyle = '#d0d0d0';
+          ctx.lineWidth = 1.4;
+          ctx.setLineDash([5, 4]);
           ctx.beginPath();
-          telemetry.forEach((pt, idx) => {
-            const px = padL + (idx / (MAX_SAMPLES - 1)) * pw;
-            const py = padT + ph - Math.min(1, pt.vel / maxV) * ph;
-            if (idx === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+          telemetry.forEach((pt, i) => {
+            const px = padL + (i / (MAX_SAMPLES - 1)) * pw;
+            const py = padT + ph - (pt.pLoad / 100) * ph;
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
           });
           ctx.stroke();
+          ctx.setLineDash([]);
 
-          // Accel centered overlay
+          // Measured solid red
           ctx.strokeStyle = '#e52521';
-          ctx.lineWidth = 1.3;
+          ctx.lineWidth = 2.1;
           ctx.beginPath();
-          telemetry.forEach((pt, idx) => {
-            const px = padL + (idx / (MAX_SAMPLES - 1)) * pw;
-            const normA = Math.max(-1, Math.min(1, pt.acc / 800));
-            const py = padT + ph / 2 - normA * (ph * 0.42);
-            if (idx === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+          telemetry.forEach((pt, i) => {
+            const px = padL + (i / (MAX_SAMPLES - 1)) * pw;
+            const py = padT + ph - (pt.mLoad / 100) * ph;
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+          });
+          ctx.stroke();
+        }
+
+      } else if (graphMode === 'trajectory') {
+        // GRAPH 2: MEASURED STEPPER POSITION (SOLID RED) vs PROJECTED TARGET PATH (DASHED WHITE)
+        ctx.fillStyle = '#f5f5f5';
+        ctx.fillText(`-- PROJECTED ANGLE (${selectedMotor})`, padL, 14);
+        ctx.fillStyle = '#e52521';
+        ctx.fillText(`━━ LIVE MEASURED ANGLE (${selectedMotor})`, padL + 165, 14);
+
+        let maxAbs = 180;
+        telemetry.forEach(pt => {
+          maxAbs = Math.max(maxAbs, Math.abs(pt.pPos) * 1.1, Math.abs(pt.mPos) * 1.1);
+        });
+
+        ctx.fillStyle = '#777';
+        ctx.fillText(`+${Math.round(maxAbs)}°`, 2, padT + 4);
+        ctx.fillText(`  0°`, 8, padT + ph / 2 + 3);
+        ctx.fillText(`-${Math.round(maxAbs)}°`, 2, padT + ph);
+
+        ctx.strokeStyle = '#282828';
+        ctx.beginPath(); ctx.moveTo(padL, padT + ph / 2); ctx.lineTo(padL + pw, padT + ph / 2); ctx.stroke();
+
+        if (telemetry.length >= 2) {
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([5, 4]);
+          ctx.beginPath();
+          telemetry.forEach((pt, i) => {
+            const px = padL + (i / (MAX_SAMPLES - 1)) * pw;
+            const py = padT + ph / 2 - (pt.pPos / maxAbs) * (ph / 2);
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+          });
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          ctx.strokeStyle = '#e52521';
+          ctx.lineWidth = 2.0;
+          ctx.beginPath();
+          telemetry.forEach((pt, i) => {
+            const px = padL + (i / (MAX_SAMPLES - 1)) * pw;
+            const py = padT + ph / 2 - (pt.mPos / maxAbs) * (ph / 2);
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+          });
+          ctx.stroke();
+        }
+
+      } else if (graphMode === 'velocity') {
+        // GRAPH 3: MEASURED ANGULAR VELOCITY (SOLID RED) vs COMMANDED VELOCITY (DASHED WHITE)
+        const maxV = Math.max(100, getSpeedDegSec() * 1.35);
+        ctx.fillStyle = '#f5f5f5';
+        ctx.fillText(`-- PROJECTED VEL (°/s)`, padL, 14);
+        ctx.fillStyle = '#e52521';
+        ctx.fillText(`━━ MEASURED VEL [${selectedMotor}]`, padL + 160, 14);
+
+        ctx.fillStyle = '#777';
+        ctx.fillText(`${Math.round(maxV)}`, 8, padT + 4);
+        ctx.fillText(`0`, 20, padT + ph);
+
+        if (telemetry.length >= 2) {
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([5, 4]);
+          ctx.beginPath();
+          telemetry.forEach((pt, i) => {
+            const px = padL + (i / (MAX_SAMPLES - 1)) * pw;
+            const py = padT + ph - Math.min(1, pt.pVel / maxV) * ph;
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+          });
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          ctx.strokeStyle = '#e52521';
+          ctx.lineWidth = 2.0;
+          ctx.beginPath();
+          telemetry.forEach((pt, i) => {
+            const px = padL + (i / (MAX_SAMPLES - 1)) * pw;
+            const py = padT + ph - Math.min(1, pt.mVel / maxV) * ph;
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
           });
           ctx.stroke();
         }
 
       } else if (graphMode === 'workspace') {
-        // MODE 3: 2D Side-Elevation Forward Kinematics & Red End-Effector Trail
-        ctx.fillStyle = '#fff'; ctx.fillText('2D KINEMATIC ENVELOPE (R-Z PLANE // MM)', padL, 14);
-        const scale = Math.min(pw / 420, ph / 340);
-        const origX = padL + pw * 0.32;
-        const origY = padT + ph - 12;
+        // GRAPH 4: 2D GHOST TARGET ARM (DASHED) vs LIVE HARDWARE ARM (SOLID + RED LOAD HALO)
+        ctx.fillStyle = '#888';
+        ctx.fillText(`-- PROJECTED TARGET POSE`, padL, 14);
+        ctx.fillStyle = '#e52521';
+        ctx.fillText(`━━ LIVE MEASURED POSE`, padL + 175, 14);
 
-        // Ground line
-        ctx.strokeStyle = '#333';
+        const scale = Math.min(pw / 420, ph / 330);
+        const origX = padL + pw * 0.34;
+        const origY = padT + ph - 10;
+        const shX = origX, shY = origY - 105 * scale;
+
+        ctx.strokeStyle = '#2b2b2b';
         ctx.beginPath(); ctx.moveTo(padL, origY); ctx.lineTo(padL + pw, origY); ctx.stroke();
 
-        // Outer reach envelope arc (295mm radius from shoulder Z=105mm)
-        const shX = origX, shY = origY - 105 * scale;
-        ctx.strokeStyle = '#1f1f1f';
+        const pFK = fk2D(projTarget.Y, projTarget.Z);
+        const mFK = fk2D(measPos.Y, measPos.Z);
+
+        // Ghost Projected Target Arm (dashed white)
+        ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+        ctx.lineWidth = 2;
         ctx.setLineDash([4, 4]);
         ctx.beginPath();
-        ctx.arc(shX, shY, 295 * scale, -Math.PI * 0.85, Math.PI * 0.28);
+        ctx.moveTo(shX, shY);
+        ctx.lineTo(origX + pFK.elbR * scale, origY - pFK.elbZ * scale);
+        ctx.lineTo(origX + pFK.tipR * scale, origY - pFK.tipZ * scale);
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // Red end-effector trail
-        if (tipTrail.length > 1) {
-          ctx.strokeStyle = '#e52521';
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          tipTrail.forEach((p, idx) => {
-            const tx = origX + p.r * scale;
-            const ty = origY - p.z * scale;
-            if (idx === 0) ctx.moveTo(tx, ty); else ctx.lineTo(tx, ty);
-          });
-          ctx.stroke();
-        }
-
-        // Current arm links
-        const cur = telemetry.length ? telemetry[telemetry.length - 1] : { elbR: 41, elbZ: 233, r_mm: 198, z_mm: 205 };
-        const elbX = origX + cur.elbR * scale, elbY = origY - cur.elbZ * scale;
-        const tipX = origX + cur.r_mm * scale, tipY = origY - cur.z_mm * scale;
-
-        // Pedestal + Upper Arm + Forearm
-        ctx.strokeStyle = '#666'; ctx.lineWidth = 5;
+        // Base Pedestal
+        ctx.strokeStyle = '#555'; ctx.lineWidth = 5;
         ctx.beginPath(); ctx.moveTo(origX, origY); ctx.lineTo(shX, shY); ctx.stroke();
 
-        ctx.strokeStyle = '#f5f5f5'; ctx.lineWidth = 3.5;
+        // Live Measured Arm
+        const elbX = origX + mFK.elbR * scale, elbY = origY - mFK.elbZ * scale;
+        const tipX = origX + mFK.tipR * scale, tipY = origY - mFK.tipZ * scale;
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3.5;
         ctx.beginPath(); ctx.moveTo(shX, shY); ctx.lineTo(elbX, elbY); ctx.lineTo(tipX, tipY); ctx.stroke();
 
-        // Joint nodes
+        // Resistance glow halo on active joint
+        const lastSample = telemetry.length ? telemetry[telemetry.length - 1] : { mLoad: 10, pLoad: 10 };
+        const excess = Math.max(0, lastSample.mLoad - lastSample.pLoad);
+        if (excess > 8) {
+          ctx.fillStyle = `rgba(229, 37, 33, ${Math.min(0.65, excess / 80)})`;
+          ctx.beginPath();
+          ctx.arc(shX, shY, 8 + excess * 0.25, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
         [[origX, origY, '#666'], [shX, shY, '#fff'], [elbX, elbY, '#fff'], [tipX, tipY, '#e52521']].forEach(([jx, jy, c]) => {
           ctx.fillStyle = c;
           ctx.beginPath(); ctx.arc(jx, jy, 4, 0, Math.PI * 2); ctx.fill();
         });
 
-        ctx.fillStyle = '#888';
-        ctx.fillText(`J1 YAW: ${simCurrent.X.toFixed(0)}°`, padL + pw - 95, padT + 14);
-        ctx.fillStyle = '#e52521';
-        ctx.fillText(`TIP: (${Math.round(cur.r_mm)}, ${Math.round(cur.z_mm)})`, padL + pw - 115, padT + 28);
-
-      } else if (graphMode === 'load') {
-        // MODE 4: Joint Duty / Torque Load Bars (Left) + Serial RTT Latency Histogram (Right)
-        ctx.fillStyle = '#fff'; ctx.fillText('JOINT TORQUE LOAD (%)', padL, 14);
-        ctx.fillStyle = '#e52521'; ctx.fillText('USB RTT LATENCY (MS)', padL + pw * 0.54, 14);
-
-        const cur = telemetry.length ? telemetry[telemetry.length - 1] : { trq: 0.18 };
-        // Max geared J2 holding torque ~ 1.4 N.m (4:1 planetary on 0.42 N.m NEMA 17)
-        const loads = [
-          ['J1 [X]', Math.min(100, 12 + Math.abs(simTarget.X - simCurrent.X) * 1.4)],
-          ['J2 [Y]', Math.min(100, (cur.trq / 1.4) * 100 + Math.abs(simTarget.Y - simCurrent.Y) * 1.2)],
-          ['J3 [Z]', Math.min(100, (cur.trq / 2.2) * 100 + Math.abs(simTarget.Z - simCurrent.Z) * 1.2)],
-          ['J4 [A]', Math.min(100, 8 + Math.abs(simTarget.A - simCurrent.A) * 1.1)]
-        ];
-        const barW = pw * 0.42;
-        loads.forEach(([lbl, pct], i) => {
-          const by = padT + 14 + i * 38;
-          ctx.fillStyle = '#aaa';
-          ctx.fillText(`${lbl}`, padL, by - 4);
-          ctx.fillText(`${Math.round(pct)}%`, padL + barW - 28, by - 4);
-          ctx.fillStyle = '#181818';
-          ctx.fillRect(padL, by, barW, 12);
-          ctx.fillStyle = pct > 70 ? '#e52521' : '#f5f5f5';
-          ctx.fillRect(padL, by, (barW * pct) / 100, 12);
-        });
-
-        // Serial RTT bar histogram on right half
-        const hx0 = padL + pw * 0.54;
-        const hw = pw * 0.46;
-        ctx.strokeStyle = '#262626';
-        ctx.strokeRect(hx0, padT + 8, hw, ph - 12);
-        if (rttHistory.length > 0) {
-          const maxRtt = Math.max(25, ...rttHistory);
-          const bw = hw / 40;
-          rttHistory.forEach((ms, idx) => {
-            const bh = Math.min(ph - 16, (ms / maxRtt) * (ph - 16));
-            ctx.fillStyle = ms > 50 ? '#e52521' : '#ffffff';
-            ctx.fillRect(hx0 + idx * bw + 1, padT + ph - 4 - bh, Math.max(2, bw - 2), bh);
-          });
-        } else {
-          ctx.fillStyle = '#555';
-          ctx.fillText('AWAITING SERIAL ACK...', hx0 + 16, padT + ph / 2);
-        }
+        ctx.fillStyle = '#aaa';
+        ctx.fillText(`J1 BASE: ${measPos.X.toFixed(1)}° (PROJ ${projTarget.X.toFixed(0)}°)`, padL + pw - 205, padT + 14);
       }
 
       ctx.restore();
@@ -1417,7 +1534,7 @@
           const clean = line.split(';')[0].trim();
           if (!clean) continue;
           if (writer) await sendAndWait(clean);
-          else { interceptGcodeForTelemetry(clean); await new Promise(r => setTimeout(r, 450)); }
+          else { interceptProjectedGcode(clean); await new Promise(r => setTimeout(r, 450)); }
         }
       } while (loop && !routineAbort);
       document.getElementById('routineStatusRow').style.display = 'none';
