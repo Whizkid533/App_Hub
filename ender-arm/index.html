@@ -138,6 +138,16 @@
       <button onclick="quickSpin(Number(document.getElementById('customDeg').value))">▶ Spin Selected Motor</button>
       <button class="secondary" onclick="quickSpin(-Number(document.getElementById('customDeg').value))">◀ Reverse</button>
     </div>
+    <div class="toolbar" style="padding-top: 6px; border-top: 1px solid var(--border);">
+      <button class="secondary small" onclick="sendCmd('M17')">🔒 Lock Motors (M17)</button>
+      <button class="secondary small" onclick="sendCmd('M84 S0')">♾️ Stay Locked (M84 S0)</button>
+      <button class="secondary small" onclick="sendCmd('M569 S1 X Y Z A')">🤫 Quiet Mode (StealthChop)</button>
+      <button class="secondary small" onclick="sendCmd('M569 S0 X Y Z A')">💪 High Torque (SpreadCycle)</button>
+      <button class="secondary small" onclick="sendCmd('M906 X600 Y600 Z600 A550')">⚡ Safe 600mA</button>
+      <button class="secondary small" onclick="sendCmd('M500')">💾 Save Settings (M500)</button>
+      <button class="secondary small" onclick="sendCmd('M119')">🔘 Check Endstops</button>
+      <button class="secondary small" onclick="sendCmd('M122')">🔍 Driver Check</button>
+    </div>
   </div>
 
   <div class="grid">
