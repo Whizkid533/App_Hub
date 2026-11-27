@@ -330,6 +330,102 @@
       color: var(--white);
     }
     .kbd-bar.visible { display: block; }
+
+    /* MULTI-AXIS WASD HUD & 2D VECTOR PAD */
+    .vector-deck {
+      display: grid;
+      grid-template-columns: 1fr 122px;
+      gap: 12px;
+      align-items: center;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+    }
+    .key-clusters {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .wasd-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 34px);
+      grid-template-rows: repeat(2, 32px);
+      gap: 4px;
+    }
+    .aux-keys {
+      display: grid;
+      grid-template-columns: repeat(2, 42px);
+      grid-template-rows: repeat(2, 32px);
+      gap: 4px;
+    }
+    .kcap {
+      background: var(--panel-sub);
+      border: 1px solid var(--border-hi);
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 700;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      line-height: 1.1;
+      user-select: none;
+      cursor: pointer;
+      transition: background 0.08s, color 0.08s, border-color 0.08s;
+    }
+    .kcap small { font-size: 8px; font-weight: 400; opacity: 0.75; }
+    .kcap.held {
+      background: var(--red);
+      border-color: var(--white);
+      color: #fff;
+      box-shadow: 0 0 10px rgba(229, 37, 33, 0.45);
+    }
+    .xy-pad {
+      position: relative;
+      width: 122px;
+      height: 92px;
+      background: #050505;
+      border: 1px solid var(--border-hi);
+      cursor: crosshair;
+      touch-action: none;
+      overflow: hidden;
+    }
+    .xy-pad::before {
+      content: "";
+      position: absolute;
+      left: 50%; top: 0; bottom: 0;
+      width: 1px; background: #1e1e1e;
+    }
+    .xy-pad::after {
+      content: "";
+      position: absolute;
+      top: 50%; left: 0; right: 0;
+      height: 1px; background: #1e1e1e;
+    }
+    .xy-puck {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      background: var(--red);
+      border: 2px solid var(--white);
+      border-radius: 50%;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 2;
+    }
+    .xy-lbl {
+      position: absolute;
+      bottom: 3px;
+      right: 5px;
+      font-family: var(--mono);
+      font-size: 8px;
+      color: #555;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
@@ -347,6 +443,7 @@
 
     <div class="toolbar">
       <button id="connectBtn" class="primary">Connect USB</button>
+      <button id="kbdTopBtn" class="active-state" onclick="toggleKeyboardMode()" title="Hold W/A/S/D/Q/E/Z/C simultaneously to drive multiple motors">Keys: ON</button>
       <button onclick="sendZero()">Zero [G92]</button>
       <button onclick="resetPoseZero()">Home 0°</button>
       <button onclick="sendCmd('M17')">Lock</button>
@@ -356,29 +453,58 @@
     </div>
   </header>
 
-  <div id="kbdBar" class="kbd-bar">
-    KEYBOARD ACTIVE &mdash; [A/D] Base &middot; [W/S] Shoulder &middot; [Q/E] Elbow &middot; [Z/C] Wrist &middot; [SPACE] Gripper &middot; [ESC] Stop
-  </div>
+  <div id="kbdBar" class="kbd-bar"></div>
 
   <div class="layout">
     <!-- LEFT COLUMN: MOTOR CONTROLS -->
     <div class="col">
       <div class="panel">
         <div class="panel-head">
-          <div class="panel-title">Single-Axis Jog</div>
+          <div class="panel-title">Multi-Axis Jog &amp; Vector Control</div>
           <div class="row">
+            <button id="multiSelBtn" class="sm" onclick="toggleMultiSelectMode()" title="Select multiple motors at once for Spin / Hold / Sweep">Multi: OFF</button>
             <span class="muted">SPEED</span>
-            <input id="speedInput" type="range" min="15" max="360" value="120" style="width:110px;"
+            <input id="speedInput" type="range" min="15" max="360" value="120" style="width:96px;"
               oninput="document.getElementById('speedLbl').textContent = this.value + ' °/s'" />
-            <span id="speedLbl" class="mono" style="width:56px; text-align:right; font-size:11px;">120 °/s</span>
+            <span id="speedLbl" class="mono" style="width:54px; text-align:right; font-size:11px;">120 °/s</span>
+          </div>
+        </div>
+
+        <!-- SIMULTANEOUS CHORDED KEYBOARD HUD + 2D XY VECTOR PAD -->
+        <div class="vector-deck">
+          <div>
+            <div class="muted" style="margin-bottom:6px; font-size:10px; letter-spacing:0.04em;">
+              HOLD MULTIPLE KEYS AT ONCE (E.G. <strong style="color:var(--white);">W + D</strong>) OR DRAG XY PAD
+            </div>
+            <div class="key-clusters">
+              <div class="wasd-grid">
+                <div></div>
+                <div class="kcap" id="kcap-w" onpointerdown="vKeyDown('w')" onpointerup="vKeyUp('w')" onpointerleave="vKeyUp('w')">W<small>Y+</small></div>
+                <div></div>
+                <div class="kcap" id="kcap-a" onpointerdown="vKeyDown('a')" onpointerup="vKeyUp('a')" onpointerleave="vKeyUp('a')">A<small>X-</small></div>
+                <div class="kcap" id="kcap-s" onpointerdown="vKeyDown('s')" onpointerup="vKeyUp('s')" onpointerleave="vKeyUp('s')">S<small>Y-</small></div>
+                <div class="kcap" id="kcap-d" onpointerdown="vKeyDown('d')" onpointerup="vKeyUp('s'); vKeyUp('d')" onpointerleave="vKeyUp('d')">D<small>X+</small></div>
+              </div>
+              <div class="aux-keys">
+                <div class="kcap" id="kcap-q" onpointerdown="vKeyDown('q')" onpointerup="vKeyUp('q')" onpointerleave="vKeyUp('q')">Q<small>Z-</small></div>
+                <div class="kcap" id="kcap-e" onpointerdown="vKeyDown('e')" onpointerup="vKeyUp('e')" onpointerleave="vKeyUp('e')">E<small>Z+</small></div>
+                <div class="kcap" id="kcap-z" onpointerdown="vKeyDown('z')" onpointerup="vKeyUp('z')" onpointerleave="vKeyUp('z')">Z<small>A-</small></div>
+                <div class="kcap" id="kcap-c" onpointerdown="vKeyDown('c')" onpointerup="vKeyUp('c')" onpointerleave="vKeyUp('c')">C<small>A+</small></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="xy-pad" id="xyPad">
+            <div class="xy-puck" id="xyPuck"></div>
+            <span class="xy-lbl">X / Y PAD</span>
           </div>
         </div>
 
         <div class="motor-tabs" id="motorTabs">
-          <div class="tab active" onclick="selectMotor('X', this)">J1 BASE [X]</div>
-          <div class="tab" onclick="selectMotor('Y', this)">J2 SHLDR [Y]</div>
-          <div class="tab" onclick="selectMotor('Z', this)">J3 ELBOW [Z]</div>
-          <div class="tab" onclick="selectMotor('A', this)">J4 WRIST [A]</div>
+          <div class="tab active" data-axis="X" onclick="selectMotor('X', this, event)">J1 BASE [X]</div>
+          <div class="tab" data-axis="Y" onclick="selectMotor('Y', this, event)">J2 SHLDR [Y]</div>
+          <div class="tab" data-axis="Z" onclick="selectMotor('Z', this, event)">J3 ELBOW [Z]</div>
+          <div class="tab" data-axis="A" onclick="selectMotor('A', this, event)">J4 WRIST [A]</div>
         </div>
 
         <div class="hold-grid">
@@ -445,7 +571,7 @@
               <button class="sm" onclick="sendCmd('M500')">Save EEPROM [M500]</button>
             </div>
             <div class="row">
-              <button id="kbdBtn" class="sm" onclick="toggleKeyboardMode()">Keyboard Jog: OFF</button>
+              <button id="kbdBtn" class="sm active-state" onclick="toggleKeyboardMode()">Keyboard Jog: ON</button>
               <button class="sm" onclick="sendCmd('M122 P150 Q')">Start Stream</button>
               <button class="sm" onclick="sendCmd('M119')">Endstops [M119]</button>
               <button class="sm" onclick="sendCmd('M122')">Drivers [M122]</button>
@@ -569,14 +695,21 @@
 
     let port = null, writer = null, reader = null;
     let selectedMotor = 'X';
+    let selectedMotors = new Set(['X']);
+    let multiSelectMode = false;
     let stepSize = 15;
     let liveFollow = true;
-    let keyboardMode = false;
+    let keyboardMode = true; // Active by default so W+D chorded multi-motor control works right away!
     let holdInterval = null;
     let sweepRunning = false;
     let routineAbort = false;
     let okResolvers = [];
     let liveDragTimer = null;
+
+    // Simultaneous multi-key & 2D XY pad vector state
+    const heldKeys = new Set();
+    let padVec = { x: 0, y: 0, active: false };
+    let vectorInFlight = 0;
 
     // --- REAL-TIME HARDWARE vs PROJECTED MODEL STATE ---
     let graphMode = 'resistance'; // 'resistance' | 'trajectory' | 'velocity' | 'workspace'
@@ -630,10 +763,36 @@
       el.scrollTop = el.scrollHeight;
     }
 
-    function selectMotor(axis, el) {
-      selectedMotor = axis;
-      document.querySelectorAll('#motorTabs .tab').forEach(t => t.classList.remove('active'));
-      if (el) el.classList.add('active');
+    function toggleMultiSelectMode() {
+      multiSelectMode = !multiSelectMode;
+      const btn = document.getElementById('multiSelBtn');
+      btn.textContent = `Multi: ${multiSelectMode ? 'ON' : 'OFF'}`;
+      btn.classList.toggle('active-state', multiSelectMode);
+      if (!multiSelectMode && selectedMotors.size > 1) {
+        selectedMotors = new Set([selectedMotor]);
+        syncMotorTabsUI();
+      }
+    }
+
+    function syncMotorTabsUI() {
+      document.querySelectorAll('#motorTabs .tab').forEach(t => {
+        t.classList.toggle('active', selectedMotors.has(t.dataset.axis));
+      });
+    }
+
+    function selectMotor(axis, el, evt) {
+      if (multiSelectMode || (evt && evt.shiftKey)) {
+        if (selectedMotors.has(axis) && selectedMotors.size > 1) {
+          selectedMotors.delete(axis);
+        } else {
+          selectedMotors.add(axis);
+        }
+        selectedMotor = Array.from(selectedMotors)[selectedMotors.size - 1];
+      } else {
+        selectedMotor = axis;
+        selectedMotors = new Set([axis]);
+      }
+      syncMotorTabsUI();
     }
 
     function setStepSize(deg, btn) {
@@ -654,10 +813,17 @@
 
     function toggleKeyboardMode() {
       keyboardMode = !keyboardMode;
-      const btn = document.getElementById('kbdBtn');
-      btn.textContent = `Keyboard Jog: ${keyboardMode ? 'ON' : 'OFF'}`;
-      btn.classList.toggle('active-state', keyboardMode);
-      document.getElementById('kbdBar').classList.toggle('visible', keyboardMode);
+      if (!keyboardMode) clearAllHeldKeys();
+      const b1 = document.getElementById('kbdBtn');
+      if (b1) {
+        b1.textContent = `Keyboard Jog: ${keyboardMode ? 'ON' : 'OFF'}`;
+        b1.classList.toggle('active-state', keyboardMode);
+      }
+      const b2 = document.getElementById('kbdTopBtn');
+      if (b2) {
+        b2.textContent = `Keys: ${keyboardMode ? 'ON' : 'OFF'}`;
+        b2.classList.toggle('active-state', keyboardMode);
+      }
     }
 
     function getSpeedDegSec() {
@@ -747,13 +913,16 @@
       });
     }
 
-    // --- JOG, HOLD, SWEEP, STOP & RESET ---
+    // --- JOG, HOLD, SWEEP, STOP & RESET (Supports Multi-Motor Lockstep!) ---
     async function quickSpin(deg, axisOverride = null) {
-      const axis = axisOverride || selectedMotor;
-      const j = JOINTS.find(x => x.id === axis);
-      const signed = (j && j.invert) ? -deg : deg;
+      const axes = axisOverride ? [axisOverride] : Array.from(selectedMotors);
+      const parts = axes.map(ax => {
+        const j = JOINTS.find(x => x.id === ax);
+        const signed = (j && j.invert) ? -deg : deg;
+        return `${ax}${signed}`;
+      });
       await sendCmd('G91');
-      await sendCmd(`G1 ${axis}${signed} F${getFeedrate()}`);
+      await sendCmd(`G1 ${parts.join(' ')} F${getFeedrate()}`);
       await sendCmd('G90');
     }
 
@@ -1002,22 +1171,127 @@
       await sendCmd(`M204 P${v} T${v}`);
     }
 
+    // --- SIMULTANEOUS MULTI-KEY (W+D / Q+E / Z+C) & 2D XY VECTOR ENGINE ---
+    const KEY_MAP = {
+      arrowleft: 'a', arrowright: 'd', arrowup: 'w', arrowdown: 's',
+      a: 'a', d: 'd', w: 'w', s: 's', q: 'q', e: 'e', z: 'z', c: 'c'
+    };
+
+    function updateKeyCapUI() {
+      ['w', 'a', 's', 'd', 'q', 'e', 'z', 'c'].forEach(k => {
+        const el = document.getElementById('kcap-' + k);
+        if (el) el.classList.toggle('held', heldKeys.has(k));
+      });
+    }
+
+    function vKeyDown(k) {
+      heldKeys.add(k);
+      updateKeyCapUI();
+    }
+    function vKeyUp(k) {
+      heldKeys.delete(k);
+      updateKeyCapUI();
+    }
+    function clearAllHeldKeys() {
+      heldKeys.clear();
+      updateKeyCapUI();
+    }
+
     document.addEventListener('keydown', e => {
       if (!keyboardMode) return;
       const tag = (e.target && e.target.tagName) || '';
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-      const k = e.key.toLowerCase();
-      if (k === 'escape') { e.preventDefault(); quickStop(); }
-      else if (k === 'a' || k === 'arrowleft')  { e.preventDefault(); jog('X', -stepSize); }
-      else if (k === 'd' || k === 'arrowright') { e.preventDefault(); jog('X',  stepSize); }
-      else if (k === 'w' || k === 'arrowup')    { e.preventDefault(); jog('Y',  stepSize); }
-      else if (k === 's' || k === 'arrowdown')  { e.preventDefault(); jog('Y', -stepSize); }
-      else if (k === 'q') { e.preventDefault(); jog('Z', -stepSize); }
-      else if (k === 'e') { e.preventDefault(); jog('Z',  stepSize); }
-      else if (k === 'z') { e.preventDefault(); jog('A', -stepSize); }
-      else if (k === 'c') { e.preventDefault(); jog('A',  stepSize); }
-      else if (k === ' ') { e.preventDefault(); toggleGripperQuick(); }
+      const raw = e.key.toLowerCase();
+      if (raw === 'escape') { e.preventDefault(); clearAllHeldKeys(); quickStop(); return; }
+      if (raw === ' ') { if (!e.repeat) { e.preventDefault(); toggleGripperQuick(); } return; }
+      const mapped = KEY_MAP[raw];
+      if (mapped) {
+        e.preventDefault();
+        if (!heldKeys.has(mapped)) vKeyDown(mapped);
+      }
     });
+
+    document.addEventListener('keyup', e => {
+      const mapped = KEY_MAP[e.key.toLowerCase()];
+      if (mapped && heldKeys.has(mapped)) {
+        e.preventDefault();
+        vKeyUp(mapped);
+      }
+    });
+
+    window.addEventListener('blur', clearAllHeldKeys);
+
+    // 2D XY Vector Pad pointer tracking
+    (function initXYPad() {
+      const pad = document.getElementById('xyPad');
+      const puck = document.getElementById('xyPuck');
+      if (!pad) return;
+      function updatePad(e) {
+        const r = pad.getBoundingClientRect();
+        const nx = Math.max(-1, Math.min(1, ((e.clientX - r.left) / r.width) * 2 - 1));
+        const ny = Math.max(-1, Math.min(1, 1 - ((e.clientY - r.top) / r.height) * 2));
+        padVec = { x: nx, y: ny, active: true };
+        puck.style.left = `${(nx + 1) * 50}%`;
+        puck.style.top = `${(1 - ny) * 50}%`;
+      }
+      function releasePad() {
+        padVec = { x: 0, y: 0, active: false };
+        puck.style.left = '50%';
+        puck.style.top = '50%';
+      }
+      pad.addEventListener('pointerdown', e => { pad.setPointerCapture(e.pointerId); updatePad(e); });
+      pad.addEventListener('pointermove', e => { if (padVec.active) updatePad(e); });
+      pad.addEventListener('pointerup', releasePad);
+      pad.addEventListener('pointercancel', releasePad);
+    })();
+
+    // 75ms Continuous Multi-Axis Vector Streamer (smooth blended G1 X.. Y.. Z.. A..!)
+    setInterval(async () => {
+      let vx = (heldKeys.has('d') ? 1 : 0) - (heldKeys.has('a') ? 1 : 0);
+      let vy = (heldKeys.has('w') ? 1 : 0) - (heldKeys.has('s') ? 1 : 0);
+      let vz = (heldKeys.has('e') ? 1 : 0) - (heldKeys.has('q') ? 1 : 0);
+      let va = (heldKeys.has('c') ? 1 : 0) - (heldKeys.has('z') ? 1 : 0);
+
+      if (padVec.active) {
+        vx = Math.abs(padVec.x) > 0.08 ? padVec.x : vx;
+        vy = Math.abs(padVec.y) > 0.08 ? padVec.y : vy;
+      }
+
+      if (vx === 0 && vy === 0 && vz === 0 && va === 0) return;
+      if (writer && vectorInFlight >= 2) return; // Keep max 2 lookahead slices buffered (150ms stop latency, zero stutter!)
+
+      const dt = 0.08;
+      const spd = getSpeedDegSec();
+      const vecMap = { X: vx, Y: vy, Z: vz, A: va };
+      const parts = [];
+      let magSq = 0;
+
+      ['X', 'Y', 'Z', 'A'].forEach(ax => {
+        const v = vecMap[ax];
+        if (v === 0) return;
+        const j = JOINTS.find(item => item.id === ax);
+        if (!j.enabled) toggleAxisEnabled(ax, true);
+        j.val = Math.max(j.min, Math.min(j.max, Number((j.val + v * spd * dt).toFixed(2))));
+        const sl = document.getElementById(`slider-${ax}`);
+        const vl = document.getElementById(`val-${ax}`);
+        if (sl) sl.value = j.val;
+        if (vl) vl.textContent = `${Math.round(j.val)}°`;
+
+        const hw = Number(hwAngle(j, j.val).toFixed(2));
+        projTarget[ax] = hw;
+        parts.push(`${ax}${hw}`);
+        magSq += (v * spd) * (v * spd);
+      });
+
+      if (!parts.length) return;
+      const vecFeed = Math.round(Math.sqrt(magSq) * 60);
+
+      if (!writer) return; // Offline telemetry updates via projTarget above!
+      vectorInFlight++;
+      sendAndWait(`G1 ${parts.join(' ')} F${vecFeed}`, 3000).finally(() => {
+        vectorInFlight = Math.max(0, vectorInFlight - 1);
+      });
+    }, 75);
 
     // --- SERIAL CONNECTION ---
     async function connectSerial() {
