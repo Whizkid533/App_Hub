@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Ender-Arm Control Panel & App Database</title>
+  <title>Ender-Arm Control Studio & App Database</title>
   <style>
     :root {
-      --bg: #0f1117;
-      --card: #181c26;
-      --border: #2a3040;
+      --bg: #0b0e14;
+      --card: #151923;
+      --card-alt: #10141d;
+      --border: #262d3d;
       --text: #e6e9f2;
       --muted: #8b94a8;
       --accent: #4f8cff;
@@ -16,169 +17,298 @@
       --green: #2ecc71;
       --red: #e74c3c;
       --amber: #f39c12;
+      --purple: #9b59b6;
     }
     * { box-sizing: border-box; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-    body { margin: 0; background: var(--bg); color: var(--text); padding: 20px; }
+    body { margin: 0; background: var(--bg); color: var(--text); padding: 18px 22px 40px; max-width: 1400px; margin-inline: auto; }
     header {
       display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-      gap: 12px; padding-bottom: 16px; border-bottom: 1px solid var(--border); margin-bottom: 20px;
+      gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--border); margin-bottom: 18px;
     }
-    h1 { margin: 0; font-size: 1.35rem; display: flex; align-items: center; gap: 10px; }
+    h1 { margin: 0; font-size: 1.35rem; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .badge {
       font-size: 0.75rem; padding: 4px 10px; border-radius: 999px;
-      background: #232836; color: var(--muted); border: 1px solid var(--border);
+      background: #1d2331; color: var(--muted); border: 1px solid var(--border); font-weight: 600;
     }
     .badge.connected { background: rgba(46,204,113,0.15); color: var(--green); border-color: var(--green); }
-    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; }
+    .badge.kbd-on { background: rgba(79,140,255,0.18); color: #8cb6ff; border-color: var(--accent); }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
     button {
       background: var(--accent); color: #fff; border: none; border-radius: 8px;
-      padding: 8px 14px; font-weight: 600; cursor: pointer; font-size: 0.88rem;
-      transition: background 0.15s, transform 0.05s;
+      padding: 8px 13px; font-weight: 600; cursor: pointer; font-size: 0.85rem;
+      transition: background 0.14s, transform 0.05s, border-color 0.14s; user-select: none;
     }
     button:hover { background: var(--accent-hover); }
-    button:active { transform: scale(0.98); }
-    button.secondary { background: #252b3b; color: var(--text); border: 1px solid var(--border); }
-    button.secondary:hover { background: #2f374a; }
+    button:active { transform: scale(0.97); }
+    button.secondary { background: #202636; color: var(--text); border: 1px solid var(--border); }
+    button.secondary:hover { background: #2a3246; border-color: #3b4661; }
+    button.secondary.active-toggle { background: rgba(79,140,255,0.22); border-color: var(--accent); color: #fff; }
+    button.warning { background: var(--amber); color: #191204; }
+    button.warning:hover { background: #d68910; }
     button.danger { background: var(--red); }
     button.danger:hover { background: #c0392b; }
-    button.success { background: var(--green); color: #0b1911; }
-    button.small { padding: 5px 10px; font-size: 0.8rem; }
+    button.success { background: var(--green); color: #08180e; }
+    button.success:hover { background: #27ae60; }
+    button.small { padding: 5px 9px; font-size: 0.78rem; border-radius: 7px; }
+    button.hold-btn {
+      background: #1e2942; border: 1px solid #355085; color: #b8d2ff; padding: 10px 14px; font-size: 0.9rem;
+    }
+    button.hold-btn:active, button.hold-btn.holding {
+      background: var(--accent); color: #fff; border-color: #fff;
+    }
 
-    .grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 20px; }
-    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+    .top-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 18px; margin-bottom: 18px; }
+    .main-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 18px; }
+    @media (max-width: 980px) { .top-grid, .main-grid { grid-template-columns: 1fr; } }
 
     .card {
       background: var(--card); border: 1px solid var(--border); border-radius: 12px;
-      padding: 18px; display: flex; flex-direction: column; gap: 14px;
+      padding: 16px; display: flex; flex-direction: column; gap: 12px;
     }
-    .card h2 { margin: 0; font-size: 1.05rem; color: #fff; display: flex; justify-content: space-between; align-items: center; }
+    .card h2 {
+      margin: 0; font-size: 1rem; color: #fff; display: flex; justify-content: space-between;
+      align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .sublabel { font-size: 0.78rem; color: var(--muted); font-weight: 400; }
+
+    .motor-pills { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .step-pills { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .pill {
+      background: var(--card-alt); color: var(--muted); border: 1px solid var(--border);
+      border-radius: 9px; padding: 9px 8px; text-align: center; cursor: pointer;
+      font-weight: 700; font-size: 0.84rem; transition: all 0.14s;
+    }
+    .pill:hover { border-color: var(--accent); color: var(--text); }
+    .pill.active { background: rgba(79,140,255,0.22); border-color: var(--accent); color: #fff; }
+    .step-pill { padding: 5px 10px; font-size: 0.78rem; border-radius: 999px; }
+
+    .spin-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+    @media (max-width: 640px) { .spin-grid { grid-template-columns: repeat(3, 1fr); } }
+    .hold-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
     .joint {
-      background: #121620; border: 1px solid var(--border); border-radius: 10px; padding: 12px;
-      display: flex; flex-direction: column; gap: 8px;
+      background: var(--card-alt); border: 1px solid var(--border); border-radius: 10px; padding: 11px 12px;
+      display: flex; flex-direction: column; gap: 7px; transition: opacity 0.15s;
     }
-    .joint-header { display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; }
-    .joint-val { font-family: ui-monospace, Consolas, monospace; color: var(--accent); font-weight: 700; }
-    .joint-controls { display: flex; align-items: center; gap: 8px; }
+    .joint.muted-axis { opacity: 0.48; }
+    .joint-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.88rem; }
+    .joint-toggles { display: flex; gap: 10px; align-items: center; font-size: 0.76rem; color: var(--muted); }
+    .joint-toggles label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+    .joint-val {
+      font-family: ui-monospace, Consolas, monospace; color: var(--accent); font-weight: 700;
+      background: #172033; padding: 2px 7px; border-radius: 6px; min-width: 54px; text-align: right;
+    }
+    .joint-controls { display: flex; align-items: center; gap: 6px; }
     input[type="range"] { flex: 1; accent-color: var(--accent); cursor: pointer; }
-    input[type="text"], input[type="number"], textarea {
-      background: #10131c; color: var(--text); border: 1px solid var(--border);
-      border-radius: 8px; padding: 8px 10px; font-size: 0.88rem; width: 100%;
+    input[type="text"], input[type="number"], select, textarea {
+      background: #0d1018; color: var(--text); border: 1px solid var(--border);
+      border-radius: 7px; padding: 7px 9px; font-size: 0.84rem;
     }
-    .row { display: flex; gap: 8px; align-items: center; }
+    textarea { width: 100%; font-family: ui-monospace, Consolas, monospace; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
-    .app-list { display: flex; flex-direction: column; gap: 10px; max-height: 360px; overflow-y: auto; }
+    .tuning-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .stat-box {
+      background: var(--card-alt); border: 1px solid var(--border); border-radius: 9px; padding: 10px;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .stat-box label { font-size: 0.78rem; color: var(--muted); display: flex; justify-content: space-between; }
+
+    .app-list { display: flex; flex-direction: column; gap: 8px; max-height: 330px; overflow-y: auto; }
     .app-item {
-      background: #121620; border: 1px solid var(--border); border-radius: 10px; padding: 12px;
+      background: var(--card-alt); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;
       display: flex; justify-content: space-between; align-items: center; gap: 10px;
     }
     .app-meta { display: flex; flex-direction: column; gap: 3px; }
-    .app-name { font-weight: 700; font-size: 0.95rem; }
-    .app-desc { font-size: 0.78rem; color: var(--muted); font-family: ui-monospace, Consolas, monospace; }
+    .app-name { font-weight: 700; font-size: 0.92rem; }
+    .app-desc { font-size: 0.76rem; color: var(--muted); font-family: ui-monospace, Consolas, monospace; }
 
     .console {
-      background: #0b0d12; border: 1px solid var(--border); border-radius: 10px;
-      padding: 10px; height: 180px; overflow-y: auto; font-family: ui-monospace, Consolas, monospace;
-      font-size: 0.8rem; line-height: 1.45; white-space: pre-wrap;
+      background: #080a0f; border: 1px solid var(--border); border-radius: 10px;
+      padding: 10px; height: 175px; overflow-y: auto; font-family: ui-monospace, Consolas, monospace;
+      font-size: 0.78rem; line-height: 1.45; white-space: pre-wrap;
     }
     .log-tx { color: #7cb3ff; }
     .log-rx { color: #8be9a8; }
     .log-sys { color: #f39c12; }
-
-    .motor-pills { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-    .pill {
-      background: #121620; color: var(--muted); border: 1px solid var(--border);
-      border-radius: 10px; padding: 10px 8px; text-align: center; cursor: pointer;
-      font-weight: 700; font-size: 0.88rem; transition: all 0.15s;
+    .kbd-hint {
+      font-size: 0.76rem; color: var(--muted); background: var(--card-alt);
+      border: 1px dashed var(--border); border-radius: 8px; padding: 7px 10px; display: none;
     }
-    .pill:hover { border-color: var(--accent); color: var(--text); }
-    .pill.active { background: rgba(79,140,255,0.2); border-color: var(--accent); color: #fff; }
-    .spin-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .kbd-hint.visible { display: block; }
+    kbd {
+      background: #22293a; border: 1px solid #3a455e; border-radius: 4px;
+      padding: 1px 5px; font-family: ui-monospace, monospace; font-size: 0.74rem; color: #fff;
+    }
   </style>
 </head>
 <body>
   <header>
     <h1>
-      🦾 Ender-Arm Control Panel
+      🦾 Ender-Arm Control Studio
       <span id="statusBadge" class="badge">Disconnected</span>
+      <span id="queueBadge" class="badge">Idle</span>
     </h1>
     <div class="toolbar">
-      <button id="connectBtn">🔌 Connect USB (SKR Mini E3)</button>
-      <button class="secondary" onclick="sendZero()">🎯 Zero Here (G92)</button>
-      <button class="secondary" onclick="sendCmd('M18')">🔓 Free Motors (M18)</button>
-      <button class="danger" onclick="sendCmd('M112')">🛑 E-STOP</button>
+      <button id="connectBtn">🔌 Connect USB</button>
+      <button id="kbdToggleBtn" class="secondary" onclick="toggleKeyboardMode()">🎮 Keyboard Off</button>
+      <button class="secondary" onclick="sendZero()">🎯 Zero All (G92)</button>
+      <button class="secondary" onclick="sendCmd('M17')">🔒 Lock (M17)</button>
+      <button class="secondary" onclick="sendCmd('M18')">🔓 Free (M18)</button>
+      <button class="warning" onclick="quickStop()">⏹ Quick Stop (M410)</button>
+      <button class="danger" onclick="hardEstop()">🛑 Kill (M112)</button>
     </div>
   </header>
 
-  <!-- QUICK MOTOR SPIN -->
-  <div class="card" style="margin-bottom: 20px;">
-    <h2>
-      ⚡ Quick Motor Spin
-      <span style="font-size:0.8rem; color:var(--muted); font-weight:400;">
-        Pick a motor &amp; click to spin relative to current position
-      </span>
-    </h2>
-    <div class="motor-pills" id="motorPills">
-      <button class="pill active" onclick="selectMotor('X', this)">XM (Base)</button>
-      <button class="pill" onclick="selectMotor('Y', this)">YM (Shoulder)</button>
-      <button class="pill" onclick="selectMotor('Z', this)">ZAM (Elbow)</button>
-      <button class="pill" onclick="selectMotor('A', this)">EM (Wrist)</button>
+  <div id="kbdHint" class="kbd-hint" style="margin-bottom: 14px;">
+    <strong>Keyboard Jog Active</strong> (step = current Step Size):
+    <kbd>A</kbd>/<kbd>D</kbd> Base (`XM`) ·
+    <kbd>W</kbd>/<kbd>S</kbd> Shoulder (`YM`) ·
+    <kbd>Q</kbd>/<kbd>E</kbd> Elbow (`ZAM`) ·
+    <kbd>Z</kbd>/<kbd>C</kbd> Wrist (`EM`) ·
+    <kbd>Space</kbd> Toggle Gripper ·
+    <kbd>Esc</kbd> Quick-Stop (`M410`)
+  </div>
+
+  <!-- TOP ROW: QUICK MOTOR JOG/HOLD/SWEEP + SPEED/DRIVER/GEAR TUNING -->
+  <div class="top-grid">
+    <!-- QUICK SPIN & SWEEP -->
+    <div class="card">
+      <h2>
+        ⚡ Single-Motor Jog, Hold &amp; Sweep
+        <span class="sublabel">Relative spin (`G91`) — works at any position</span>
+      </h2>
+
+      <div class="motor-pills" id="motorPills">
+        <button class="pill active" onclick="selectMotor('X', this)">XM · Base</button>
+        <button class="pill" onclick="selectMotor('Y', this)">YM · Shoulder</button>
+        <button class="pill" onclick="selectMotor('Z', this)">ZAM · Elbow</button>
+        <button class="pill" onclick="selectMotor('A', this)">EM · Wrist</button>
+      </div>
+
+      <div class="hold-row">
+        <button class="hold-btn" id="holdRevBtn"
+          onpointerdown="startHoldSpin(-1, this)" onpointerup="stopHoldSpin(this)" onpointerleave="stopHoldSpin(this)">
+          ⏪ Hold to Spin CCW ( - )
+        </button>
+        <button class="hold-btn" id="holdFwdBtn"
+          onpointerdown="startHoldSpin(1, this)" onpointerup="stopHoldSpin(this)" onpointerleave="stopHoldSpin(this)">
+          Hold to Spin CW ( + ) ⏩
+        </button>
+      </div>
+
+      <div class="spin-grid">
+        <button class="secondary" onclick="quickSpin(-360)">-360°</button>
+        <button class="secondary" onclick="quickSpin(-90)">-90°</button>
+        <button class="secondary" onclick="quickSpin(-15)">-15°</button>
+        <button class="success" onclick="quickSpin(15)">+15°</button>
+        <button class="success" onclick="quickSpin(90)">+90°</button>
+        <button class="success" onclick="quickSpin(360)">+360°</button>
+      </div>
+
+      <div class="row">
+        <input id="customDeg" type="number" value="180" style="width:92px;" />
+        <span class="sublabel">deg</span>
+        <button class="small" onclick="quickSpin(Number(document.getElementById('customDeg').value))">▶ Spin +</button>
+        <button class="secondary small" onclick="quickSpin(-Number(document.getElementById('customDeg').value))">◀ Spin -</button>
+        <span style="flex:1"></span>
+        <button id="sweepBtn" class="secondary small" onclick="toggleSweep()">🔄 Sweep Back &amp; Forth</button>
+      </div>
     </div>
-    <div class="spin-grid">
-      <button class="secondary" onclick="quickSpin(-360)">⟲ -360° (1 rev)</button>
-      <button class="secondary" onclick="quickSpin(-90)">⟲ -90°</button>
-      <button class="secondary" onclick="quickSpin(-45)">⟲ -45°</button>
-      <button class="success" onclick="quickSpin(45)">⟳ +45°</button>
-      <button class="success" onclick="quickSpin(90)">⟳ +90°</button>
-      <button class="success" onclick="quickSpin(360)">⟳ +360° (1 rev)</button>
-    </div>
-    <div class="row">
-      <input id="customDeg" type="number" value="180" style="max-width:120px;" />
-      <span style="color:var(--muted); font-size:0.85rem;">degrees</span>
-      <button onclick="quickSpin(Number(document.getElementById('customDeg').value))">▶ Spin Selected Motor</button>
-      <button class="secondary" onclick="quickSpin(-Number(document.getElementById('customDeg').value))">◀ Reverse</button>
-    </div>
-    <div class="toolbar" style="padding-top: 6px; border-top: 1px solid var(--border);">
-      <button class="secondary small" onclick="sendCmd('M17')">🔒 Lock Motors (M17)</button>
-      <button class="secondary small" onclick="sendCmd('M84 S0')">♾️ Stay Locked (M84 S0)</button>
-      <button class="secondary small" onclick="sendCmd('M569 S1 X Y Z A')">🤫 Quiet Mode (StealthChop)</button>
-      <button class="secondary small" onclick="sendCmd('M569 S0 X Y Z A')">💪 High Torque (SpreadCycle)</button>
-      <button class="secondary small" onclick="sendCmd('M906 X600 Y600 Z600 A550')">⚡ Safe 600mA</button>
-      <button class="secondary small" onclick="sendCmd('M500')">💾 Save Settings (M500)</button>
-      <button class="secondary small" onclick="sendCmd('M119')">🔘 Check Endstops</button>
-      <button class="secondary small" onclick="sendCmd('M122')">🔍 Driver Check</button>
+
+    <!-- MOTION, DRIVER & GEAR TUNING -->
+    <div class="card">
+      <h2>
+        ⚙️ Speed, Torque &amp; Gear Calibration
+        <div class="row">
+          <button class="secondary small" onclick="applySpeedPreset(20, 80)">🐢 Slow</button>
+          <button class="secondary small" onclick="applySpeedPreset(50, 200)">⚖️ Smooth</button>
+          <button class="secondary small" onclick="applySpeedPreset(110, 500)">🚀 Fast</button>
+        </div>
+      </h2>
+
+      <div class="tuning-grid">
+        <div class="stat-box">
+          <label><span>Speed</span> <strong id="speedLbl">50 °/s</strong></label>
+          <input id="speedInput" type="range" min="5" max="240" value="50"
+            oninput="document.getElementById('speedLbl').textContent = this.value + ' °/s'" />
+        </div>
+        <div class="stat-box">
+          <label><span>Acceleration (`M204`)</span> <strong id="accelLbl">200 °/s²</strong></label>
+          <input id="accelInput" type="range" min="30" max="1500" step="10" value="200"
+            oninput="document.getElementById('accelLbl').textContent = this.value + ' °/s²'"
+            onchange="sendCmd(`M204 P${this.value} T${this.value}`)" />
+        </div>
+      </div>
+
+      <div class="stat-box">
+        <label>
+          <span>Drive Mode (`M92` Steps / Degree)</span>
+          <span class="sublabel">1:1 = 8.889 · 4:1 Planetary = 35.556</span>
+        </label>
+        <div class="row">
+          <button class="secondary small" onclick="setDriveSteps('bench')">🔧 Bench Bare Motors (1:1)</button>
+          <button class="secondary small" onclick="setDriveSteps('geared')">🦾 Geared Cobot Arm (4:1 J2/J3)</button>
+          <button class="secondary small" onclick="sendCmd('M500')">💾 Save EEPROM (`M500`)</button>
+        </div>
+      </div>
+
+      <div class="toolbar" style="padding-top: 4px; border-top: 1px solid var(--border);">
+        <button class="secondary small" onclick="sendCmd('M84 S0')">♾️ Stay Locked</button>
+        <button class="secondary small" onclick="sendCmd('M569 S1 X Y Z A')">🤫 Quiet (StealthChop)</button>
+        <button class="secondary small" onclick="sendCmd('M569 S0 X Y Z A')">💪 Torque (SpreadCycle)</button>
+        <button class="secondary small" onclick="setMotorCurrentPrompt()">⚡ Set mA (`M906`)</button>
+        <button class="secondary small" onclick="sendCmd('M114')">📍 Read Pos (`M114`)</button>
+        <button class="secondary small" onclick="sendCmd('M119')">🔘 Endstops</button>
+        <button class="secondary small" onclick="sendCmd('M122')">🔍 Drivers</button>
+      </div>
     </div>
   </div>
 
-  <div class="grid">
+  <!-- BOTTOM ROW: MULTI-AXIS SLIDERS + TEACH PENDANT / APP DATABASE -->
+  <div class="main-grid">
     <!-- LEFT: LIVE JOINT CONTROLS -->
     <div class="card">
       <h2>
-        Live Joint Control
-        <span style="font-size:0.8rem; color:var(--muted); font-weight:400;">
-          Speed: <input id="speedInput" type="number" value="45" min="5" max="180" style="width:64px; padding:4px 6px;" /> °/s
-        </span>
+        🎛️ Multi-Joint Pose Control
+        <div class="row">
+          <button id="liveFollowBtn" class="secondary small active-toggle" onclick="toggleLiveFollow()">⚡ Live Drag: ON</button>
+          <button class="secondary small" onclick="resetSliders()">↺ All 0°</button>
+        </div>
       </h2>
 
-      <div id="jointsContainer"></div>
-
-      <div class="row">
-        <button class="success" style="flex:1;" onclick="sendCurrentPose()">▶ Move to Sliders</button>
-        <button class="secondary" onclick="resetSliders()">↺ Center (0°)</button>
+      <div class="step-pills">
+        <span class="sublabel">Jog Step:</span>
+        <button class="pill step-pill" onclick="setStepSize(1, this)">1°</button>
+        <button class="pill step-pill" onclick="setStepSize(5, this)">5°</button>
+        <button class="pill step-pill active" onclick="setStepSize(15, this)">15°</button>
+        <button class="pill step-pill" onclick="setStepSize(45, this)">45°</button>
+        <button class="pill step-pill" onclick="setStepSize(90, this)">90°</button>
       </div>
 
-      <h2 style="margin-top:6px;">Serial Console</h2>
+      <div id="jointsContainer" style="display:flex; flex-direction:column; gap:9px;"></div>
+
+      <div class="row">
+        <button class="success" style="flex:1;" onclick="sendAllEnabledJoints()">▶ Move All Enabled Joints to Sliders</button>
+        <button class="secondary" onclick="toggleGripperQuick()">🤏 Open / Close Gripper</button>
+      </div>
+
+      <h2 style="margin-top:4px;">
+        Serial Console
+        <button class="secondary small" onclick="document.getElementById('console').innerHTML=''">Clear</button>
+      </h2>
       <div id="console" class="console"></div>
       <div class="row">
-        <input id="gcodeInput" type="text" placeholder="Type G-code (e.g. G1 X90 F1800 or M122)..." />
+        <input id="gcodeInput" type="text" style="flex:1;" placeholder="Send G-code (e.g. G1 X180 F3000, M906 X650, M114)..." />
         <button onclick="sendManualGcode()">Send</button>
       </div>
     </div>
 
-    <!-- RIGHT: APP / ROUTINE DATABASE -->
+    <!-- RIGHT: TEACH PENDANT & APP DATABASE -->
     <div class="card">
       <h2>
-        📦 App &amp; Routine Database
+        📦 Teach Pendant &amp; App Database
         <div class="row">
           <button class="secondary small" onclick="exportDB()">⬇ Export JSON</button>
           <button class="secondary small" onclick="document.getElementById('importFile').click()">⬆ Import</button>
@@ -187,12 +317,18 @@
       </h2>
 
       <div class="joint">
-        <div class="joint-header"><strong>Create New App / Pose</strong></div>
-        <input id="appName" type="text" placeholder="App name (e.g. Wave Hello, Pick Cube)" />
-        <textarea id="appSteps" rows="3" placeholder="G-code lines (leave blank to save current slider pose!)"></textarea>
+        <div class="joint-header">
+          <strong>Build Routine / Pose</strong>
+          <div class="row">
+            <button class="secondary small" onclick="recordKeyframe()">+ Record Current Pose</button>
+            <button class="secondary small" onclick="addPauseStep()">+ 0.5s Pause</button>
+          </div>
+        </div>
+        <input id="appName" type="text" style="width:100%;" placeholder="Routine name (e.g. Pick & Place Cube, Wave)" />
+        <textarea id="appSteps" rows="4" placeholder="Jog the motors & click '+ Record Current Pose' to build a sequence, or type G-code..."></textarea>
         <div class="row">
-          <button class="small" onclick="saveApp()">💾 Save to Database</button>
-          <button class="secondary small" onclick="fillPoseIntoSteps()">+ Insert Current Pose</button>
+          <button class="small" onclick="saveApp()">💾 Save Routine</button>
+          <button id="stopRoutineBtn" class="warning small" style="display:none;" onclick="abortRoutine()">⏹ Stop Routine</button>
         </div>
       </div>
 
@@ -202,42 +338,61 @@
 
   <script>
     const JOINTS = [
-      { id: 'X', name: 'J1 — Base (XM)',     min: -135, max: 135, val: 0 },
-      { id: 'Y', name: 'J2 — Shoulder (YM)', min: -45,  max: 120, val: 0 },
-      { id: 'Z', name: 'J3 — Elbow (ZAM)',   min: -120, max: 120, val: 0 },
-      { id: 'A', name: 'J4 — Wrist (EM)',    min: -90,  max: 90,  val: 0 },
-      { id: 'G', name: 'Gripper Servo (P0)', min: 0,    max: 180, val: 90 }
+      { id: 'X', name: 'J1 — Base (XM)',     min: -180, max: 180, val: 0, enabled: true,  invert: false },
+      { id: 'Y', name: 'J2 — Shoulder (YM)', min: -90,  max: 135, val: 0, enabled: true,  invert: false },
+      { id: 'Z', name: 'J3 — Elbow (ZAM)',   min: -135, max: 135, val: 0, enabled: false, invert: false },
+      { id: 'A', name: 'J4 — Wrist (EM)',    min: -180, max: 180, val: 0, enabled: false, invert: false },
+      { id: 'G', name: 'Gripper Servo (P0)', min: 10,   max: 170, val: 90, enabled: true, invert: false }
     ];
 
     const DEFAULT_APPS = [
       {
         id: 'demo-home',
-        name: 'Center Pose',
-        gcode: 'G90\nG1 X0 Y0 Z0 A0 F2700\nM280 P0 S90'
+        name: 'Home / Center Pose (0°)',
+        gcode: 'G90\nG1 X0 Y0 F3000\nM280 P0 S90\nM400'
       },
       {
-        id: 'demo-spin',
-        name: '2-Motor Bench Test (XM + YM)',
-        gcode: 'G90\nG92 X0 Y0\nG1 X90 Y90 F2700\nM400\nG1 X0 Y0 F2700\nM400'
+        id: 'demo-2motor',
+        name: '2-Motor Sync Dance (XM + YM)',
+        gcode: 'G90\nG92 X0 Y0\nG1 X90 Y45 F3600\nM400\nG1 X-90 Y-45 F3600\nM400\nG1 X0 Y0 F3600\nM400'
+      },
+      {
+        id: 'demo-pick',
+        name: 'Sample Pick & Release',
+        gcode: 'G90\nM280 P0 S40\nG1 X45 Y35 F2700\nM400\nM280 P0 S130\nG4 P500\nG1 X-45 Y10 F2700\nM400\nM280 P0 S40'
       }
     ];
 
     let port = null, writer = null, reader = null;
     let selectedMotor = 'X';
-    let apps = JSON.parse(localStorage.getItem('ender_arm_apps') || 'null') || DEFAULT_APPS;
+    let stepSize = 15;
+    let liveFollow = true;
+    let keyboardMode = false;
+    let holdInterval = null;
+    let sweepRunning = false;
+    let routineAbort = false;
 
-    function selectMotor(axis, btn) {
-      selectedMotor = axis;
-      document.querySelectorAll('#motorPills .pill').forEach(b => b.classList.remove('active'));
-      if (btn) btn.classList.add('active');
+    // 'ok' promise queue so routines & live drags stay smoothly synchronized with Marlin
+    let okResolvers = [];
+    let liveDragTimer = null;
+
+    let apps = JSON.parse(localStorage.getItem('ender_arm_apps_v2') || localStorage.getItem('ender_arm_apps') || 'null') || DEFAULT_APPS;
+
+    // Load saved joint preferences (enabled / invert)
+    const savedCfg = JSON.parse(localStorage.getItem('ender_arm_joint_cfg') || 'null');
+    if (savedCfg) {
+      JOINTS.forEach(j => {
+        if (savedCfg[j.id]) {
+          j.enabled = savedCfg[j.id].enabled;
+          j.invert = savedCfg[j.id].invert;
+        }
+      });
     }
 
-    async function quickSpin(deg) {
-      if (!deg || isNaN(deg)) return;
-      const speed = Number(document.getElementById('speedInput').value || 45) * 60;
-      await sendCmd('G91');
-      await sendCmd(`G1 ${selectedMotor}${deg} F${speed}`);
-      await sendCmd('G90');
+    function saveJointCfg() {
+      const cfg = {};
+      JOINTS.forEach(j => { cfg[j.id] = { enabled: j.enabled, invert: j.invert }; });
+      localStorage.setItem('ender_arm_joint_cfg', JSON.stringify(cfg));
     }
 
     function log(msg, cls = 'log-sys') {
@@ -246,51 +401,289 @@
       span.className = cls;
       span.textContent = msg;
       el.appendChild(span);
+      if (el.childNodes.length > 250) el.removeChild(el.firstChild);
       el.scrollTop = el.scrollHeight;
     }
 
+    function selectMotor(axis, btn) {
+      selectedMotor = axis;
+      document.querySelectorAll('#motorPills .pill').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+    }
+
+    function setStepSize(deg, btn) {
+      stepSize = deg;
+      document.querySelectorAll('.step-pill').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      renderJoints();
+    }
+
+    function toggleLiveFollow() {
+      liveFollow = !liveFollow;
+      const btn = document.getElementById('liveFollowBtn');
+      btn.textContent = `⚡ Live Drag: ${liveFollow ? 'ON' : 'OFF'}`;
+      btn.classList.toggle('active-toggle', liveFollow);
+    }
+
+    function toggleKeyboardMode() {
+      keyboardMode = !keyboardMode;
+      const btn = document.getElementById('kbdToggleBtn');
+      btn.textContent = keyboardMode ? '🎮 Keyboard ON' : '🎮 Keyboard Off';
+      btn.classList.toggle('active-toggle', keyboardMode);
+      document.getElementById('kbdHint').classList.toggle('visible', keyboardMode);
+    }
+
+    function getFeedrate() {
+      return Math.round(Number(document.getElementById('speedInput').value || 50) * 60);
+    }
+
+    function hwAngle(joint, uiAngle) {
+      if (joint.id === 'G') return uiAngle;
+      return joint.invert ? -uiAngle : uiAngle;
+    }
+
+    // --- QUICK SPIN, HOLD-TO-JOG & SWEEP ---
+    async function quickSpin(deg, axisOverride = null) {
+      const axis = axisOverride || selectedMotor;
+      const j = JOINTS.find(x => x.id === axis);
+      const signed = (j && j.invert) ? -deg : deg;
+      await sendCmd('G91');
+      await sendCmd(`G1 ${axis}${signed} F${getFeedrate()}`);
+      await sendCmd('G90');
+    }
+
+    function startHoldSpin(dir, btn) {
+      if (!writer) { log('Connect USB first!', 'log-sys'); return; }
+      stopHoldSpin();
+      if (btn) btn.classList.add('holding');
+      const spd = Number(document.getElementById('speedInput').value || 50);
+      // Stream small 0.18s steps so motion is continuous and stops cleanly
+      const chunkDeg = Math.max(2, Math.round(spd * 0.18)) * dir;
+      quickSpin(chunkDeg);
+      holdInterval = setInterval(() => {
+        if (okResolvers.length < 3) quickSpin(chunkDeg);
+      }, 150);
+    }
+
+    async function stopHoldSpin(btn) {
+      if (btn) btn.classList.remove('holding');
+      if (holdInterval) {
+        clearInterval(holdInterval);
+        holdInterval = null;
+        if (writer) await sendCmd('M410');
+      }
+    }
+
+    async function toggleSweep() {
+      const btn = document.getElementById('sweepBtn');
+      if (sweepRunning) {
+        sweepRunning = false;
+        btn.textContent = '🔄 Sweep Back & Forth';
+        btn.classList.remove('active-toggle');
+        await quickStop();
+        return;
+      }
+      if (!writer) { log('Connect USB first!', 'log-sys'); return; }
+      const amp = Math.abs(Number(document.getElementById('customDeg').value || 90));
+      sweepRunning = true;
+      btn.textContent = '⏹ Stop Sweep';
+      btn.classList.add('active-toggle');
+      log(`Starting ±${amp}° sweep on ${selectedMotor}...`, 'log-sys');
+      while (sweepRunning && writer) {
+        await quickSpin(amp);
+        await sendAndWait('M400');
+        if (!sweepRunning) break;
+        await quickSpin(-amp);
+        await sendAndWait('M400');
+      }
+      sweepRunning = false;
+      btn.textContent = '🔄 Sweep Back & Forth';
+      btn.classList.remove('active-toggle');
+    }
+
+    async function quickStop() {
+      sweepRunning = false;
+      routineAbort = true;
+      if (holdInterval) { clearInterval(holdInterval); holdInterval = null; }
+      await sendCmd('M410'); // Quick-stop all steppers WITHOUT halting Marlin!
+      await sendCmd('G90');
+      log('Quick-stopped motion (M410) — board stays active!', 'log-sys');
+    }
+
+    async function hardEstop() {
+      if (confirm('M112 Emergency Stop halts Marlin until you press RESET on the board. Continue?')) {
+        await sendCmd('M112');
+      }
+    }
+
+    // --- SPEED, CURRENT & GEAR CALIBRATION ---
+    async function applySpeedPreset(spd, acc) {
+      document.getElementById('speedInput').value = spd;
+      document.getElementById('speedLbl').textContent = spd + ' °/s';
+      document.getElementById('accelInput').value = acc;
+      document.getElementById('accelLbl').textContent = acc + ' °/s²';
+      if (writer) await sendCmd(`M204 P${acc} T${acc}`);
+    }
+
+    async function setDriveSteps(mode) {
+      if (mode === 'bench') {
+        await sendCmd('M92 X8.889 Y8.889 Z8.889 A8.889');
+        log('Set 1:1 bare-motor steps/deg (8.889)', 'log-sys');
+      } else {
+        await sendCmd('M92 X8.889 Y35.556 Z35.556 A8.889');
+        log('Set 4:1 planetary geared steps/deg on J2/J3 (35.556)', 'log-sys');
+      }
+    }
+
+    async function setMotorCurrentPrompt() {
+      const ma = prompt('Enter RMS current in mA for X/Y/Z motors (550–650 recommended for small 42-34 motors, 800 for larger E motor):', '600');
+      if (!ma) return;
+      const val = Math.max(300, Math.min(1000, parseInt(ma, 10) || 600));
+      await sendCmd(`M906 X${val} Y${val} Z${val} A${Math.min(val, 600)}`);
+    }
+
+    // --- JOINT POSE SLIDERS ---
     function renderJoints() {
       const c = document.getElementById('jointsContainer');
       c.innerHTML = '';
       JOINTS.forEach(j => {
         const div = document.createElement('div');
-        div.className = 'joint';
+        div.className = 'joint' + (j.enabled ? '' : ' muted-axis');
+        div.id = `card-${j.id}`;
+        const invHtml = j.id === 'G' ? '' : `
+          <label title="Flip motor direction without rewiring">
+            <input type="checkbox" ${j.invert ? 'checked' : ''} onchange="toggleInvert('${j.id}', this.checked)" /> Invert
+          </label>`;
         div.innerHTML = `
           <div class="joint-header">
-            <span>${j.name}</span>
-            <span class="joint-val" id="val-${j.id}">${j.val}°</span>
+            <div class="row" style="gap:8px;">
+              <input type="checkbox" ${j.enabled ? 'checked' : ''} title="Enable/Mute this motor"
+                onchange="toggleAxisEnabled('${j.id}', this.checked)" />
+              <strong>${j.name}</strong>
+            </div>
+            <div class="joint-toggles">
+              ${invHtml}
+              <button class="secondary small" style="padding:2px 7px;" onclick="zeroSingle('${j.id}')">0°</button>
+              <span class="joint-val" id="val-${j.id}">${j.val}°</span>
+            </div>
           </div>
           <div class="joint-controls">
-            <button class="secondary small" onclick="jog('${j.id}', -15)">-15°</button>
+            <button class="secondary small" onclick="jog('${j.id}', -${stepSize})">-${stepSize}°</button>
             <input type="range" id="slider-${j.id}" min="${j.min}" max="${j.max}" value="${j.val}"
-              oninput="updateJoint('${j.id}', this.value)" />
-            <button class="secondary small" onclick="jog('${j.id}', 15)">+15°</button>
+              oninput="onSliderInput('${j.id}', this.value)" />
+            <button class="secondary small" onclick="jog('${j.id}', ${stepSize})">+${stepSize}°</button>
           </div>
         `;
         c.appendChild(div);
       });
     }
 
-    function updateJoint(id, val) {
+    function toggleAxisEnabled(id, checked) {
+      const j = JOINTS.find(x => x.id === id);
+      j.enabled = checked;
+      document.getElementById(`card-${id}`).classList.toggle('muted-axis', !checked);
+      saveJointCfg();
+    }
+
+    function toggleInvert(id, checked) {
+      const j = JOINTS.find(x => x.id === id);
+      j.invert = checked;
+      saveJointCfg();
+    }
+
+    async function zeroSingle(id) {
+      const j = JOINTS.find(x => x.id === id);
+      if (id === 'G') {
+        j.val = 90;
+        renderJoints();
+        if (writer) await sendCmd('M280 P0 S90');
+        return;
+      }
+      j.val = 0;
+      renderJoints();
+      if (writer) await sendCmd(`G92 ${id}0`);
+    }
+
+    function onSliderInput(id, val) {
       const j = JOINTS.find(x => x.id === id);
       j.val = Number(val);
       document.getElementById(`val-${id}`).textContent = `${j.val}°`;
+      if (liveFollow && writer && j.enabled) {
+        if (liveDragTimer) clearTimeout(liveDragTimer);
+        liveDragTimer = setTimeout(() => sendSingleJoint(j), 85);
+      }
     }
 
-    function jog(id, delta) {
+    async function sendSingleJoint(j) {
+      if (!writer || !j.enabled) return;
+      if (j.id === 'G') {
+        await sendCmd(`M280 P0 S${j.val}`);
+      } else {
+        await sendCmd(`G90`);
+        await sendCmd(`G1 ${j.id}${hwAngle(j, j.val)} F${getFeedrate()}`);
+      }
+    }
+
+    async function jog(id, delta) {
       const j = JOINTS.find(x => x.id === id);
       j.val = Math.max(j.min, Math.min(j.max, j.val + delta));
       document.getElementById(`slider-${id}`).value = j.val;
       document.getElementById(`val-${id}`).textContent = `${j.val}°`;
-      if (port) sendCurrentPose();
+      if (!j.enabled) toggleAxisEnabled(id, true);
+      await sendSingleJoint(j);
     }
 
-    function resetSliders() {
-      JOINTS.forEach(j => updateJoint(j.id, j.id === 'G' ? 90 : 0));
+    async function toggleGripperQuick() {
+      const g = JOINTS.find(x => x.id === 'G');
+      g.val = g.val > 90 ? 35 : 135;
       renderJoints();
-      if (port) sendCurrentPose();
+      if (writer) await sendCmd(`M280 P0 S${g.val}`);
     }
 
+    async function resetSliders() {
+      JOINTS.forEach(j => { j.val = j.id === 'G' ? 90 : 0; });
+      renderJoints();
+      if (writer) await sendAllEnabledJoints();
+    }
+
+    async function sendAllEnabledJoints() {
+      const parts = [];
+      JOINTS.forEach(j => {
+        if (j.enabled && j.id !== 'G') parts.push(`${j.id}${hwAngle(j, j.val)}`);
+      });
+      if (parts.length > 0) {
+        await sendCmd('G90');
+        await sendCmd(`G1 ${parts.join(' ')} F${getFeedrate()}`);
+      }
+      const g = JOINTS.find(x => x.id === 'G');
+      if (g && g.enabled) await sendCmd(`M280 P0 S${g.val}`);
+    }
+
+    async function sendZero() {
+      await sendCmd('G92 X0 Y0 Z0 A0');
+      JOINTS.forEach(j => { if (j.id !== 'G') j.val = 0; });
+      renderJoints();
+    }
+
+    // --- KEYBOARD HOTKEYS ---
+    document.addEventListener('keydown', e => {
+      if (!keyboardMode) return;
+      const tag = (e.target && e.target.tagName) || '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      const k = e.key.toLowerCase();
+      if (k === 'escape') { e.preventDefault(); quickStop(); }
+      else if (k === 'a' || k === 'arrowleft')  { e.preventDefault(); jog('X', -stepSize); }
+      else if (k === 'd' || k === 'arrowright') { e.preventDefault(); jog('X',  stepSize); }
+      else if (k === 'w' || k === 'arrowup')    { e.preventDefault(); jog('Y',  stepSize); }
+      else if (k === 's' || k === 'arrowdown')  { e.preventDefault(); jog('Y', -stepSize); }
+      else if (k === 'q') { e.preventDefault(); jog('Z', -stepSize); }
+      else if (k === 'e') { e.preventDefault(); jog('Z',  stepSize); }
+      else if (k === 'z') { e.preventDefault(); jog('A', -stepSize); }
+      else if (k === 'c') { e.preventDefault(); jog('A',  stepSize); }
+      else if (k === ' ') { e.preventDefault(); toggleGripperQuick(); }
+    });
+
+    // --- WEB SERIAL & 'OK' SYNC ---
     async function connectSerial() {
       if (!('serial' in navigator)) {
         alert('Web Serial API requires Chrome or Edge on desktop.');
@@ -308,6 +701,7 @@
         await writer.write(new TextEncoder().encode('\n'));
         await new Promise(r => setTimeout(r, 150));
         await sendCmd('G90');
+        await sendCmd('M84 S0'); // Keep motors locked until M18
       } catch (err) {
         log('Connection failed: ' + err.message, 'log-sys');
       }
@@ -325,31 +719,43 @@
           buf += value;
           const lines = buf.split('\n');
           buf = lines.pop();
-          lines.forEach(l => { if (l.trim()) log('<< ' + l.trim(), 'log-rx'); });
+          lines.forEach(raw => {
+            const l = raw.trim();
+            if (!l) return;
+            log('<< ' + l, 'log-rx');
+            if (l.startsWith('ok') && okResolvers.length > 0) {
+              const res = okResolvers.shift();
+              res();
+              updateQueueBadge();
+            }
+          });
         }
       } catch (err) {
         log('Disconnected: ' + err.message, 'log-sys');
       }
     }
 
+    function updateQueueBadge() {
+      const b = document.getElementById('queueBadge');
+      b.textContent = okResolvers.length > 0 ? `Busy (${okResolvers.length})` : 'Ready';
+    }
+
     async function sendCmd(cmd) {
       if (!writer) { log('Not connected! Click Connect USB first.', 'log-sys'); return; }
-      const clean = cmd.trim();
+      const clean = cmd.split(';')[0].trim();
       if (!clean) return;
       log('>> ' + clean, 'log-tx');
       await writer.write(new TextEncoder().encode(clean + '\n'));
     }
 
-    async function sendZero() {
-      await sendCmd('G92 X0 Y0 Z0 A0');
-      resetSliders();
-    }
-
-    async function sendCurrentPose() {
-      const speed = Number(document.getElementById('speedInput').value || 45) * 60;
-      const [x, y, z, a, g] = JOINTS.map(j => j.val);
-      await sendCmd(`G1 X${x} Y${y} Z${z} A${a} F${speed}`);
-      await sendCmd(`M280 P0 S${g}`);
+    function sendAndWait(cmd, timeoutMs = 15000) {
+      return new Promise(async resolve => {
+        if (!writer) { resolve(); return; }
+        const timer = setTimeout(() => { resolve(); updateQueueBadge(); }, timeoutMs);
+        okResolvers.push(() => { clearTimeout(timer); resolve(); });
+        updateQueueBadge();
+        await sendCmd(cmd);
+      });
     }
 
     function sendManualGcode() {
@@ -357,34 +763,43 @@
       sendCmd(inp.value);
       inp.value = '';
     }
-
     document.getElementById('gcodeInput').addEventListener('keydown', e => {
       if (e.key === 'Enter') sendManualGcode();
     });
     document.getElementById('connectBtn').addEventListener('click', connectSerial);
 
-    // --- APP DATABASE ---
+    // --- TEACH PENDANT & APP DATABASE ---
     function persistApps() {
-      localStorage.setItem('ender_arm_apps', JSON.stringify(apps));
+      localStorage.setItem('ender_arm_apps_v2', JSON.stringify(apps));
       renderApps();
     }
 
-    function fillPoseIntoSteps() {
-      const speed = Number(document.getElementById('speedInput').value || 45) * 60;
-      const [x, y, z, a, g] = JOINTS.map(j => j.val);
+    function recordKeyframe() {
+      const parts = [];
+      JOINTS.forEach(j => {
+        if (j.enabled && j.id !== 'G') parts.push(`${j.id}${hwAngle(j, j.val)}`);
+      });
+      const g = JOINTS.find(x => x.id === 'G');
+      const lines = [];
+      if (parts.length > 0) lines.push(`G1 ${parts.join(' ')} F${getFeedrate()}`);
+      if (g && g.enabled) lines.push(`M280 P0 S${g.val}`);
+      lines.push('M400');
       const ta = document.getElementById('appSteps');
-      const line = `G1 X${x} Y${y} Z${z} A${a} F${speed}\nM280 P0 S${g}\nM400`;
-      ta.value = ta.value ? ta.value + '\n' + line : line;
+      ta.value = (ta.value ? ta.value + '\n' : 'G90\n') + lines.join('\n');
+    }
+
+    function addPauseStep() {
+      const ta = document.getElementById('appSteps');
+      ta.value = (ta.value ? ta.value + '\n' : '') + 'G4 P500';
     }
 
     function saveApp() {
       const name = document.getElementById('appName').value.trim();
       let gcode = document.getElementById('appSteps').value.trim();
-      if (!name) { alert('Give your app a name!'); return; }
+      if (!name) { alert('Give your routine a name!'); return; }
       if (!gcode) {
-        const speed = Number(document.getElementById('speedInput').value || 45) * 60;
-        const [x, y, z, a, g] = JOINTS.map(j => j.val);
-        gcode = `G90\nG1 X${x} Y${y} Z${z} A${a} F${speed}\nM280 P0 S${g}`;
+        recordKeyframe();
+        gcode = document.getElementById('appSteps').value.trim();
       }
       apps.unshift({ id: 'app-' + Date.now(), name, gcode });
       document.getElementById('appName').value = '';
@@ -392,16 +807,33 @@
       persistApps();
     }
 
-    async function runApp(id) {
+    function abortRoutine() {
+      routineAbort = true;
+      quickStop();
+    }
+
+    async function runApp(id, loop = false) {
+      const app = apps.find(a => a.id === id);
+      if (!app || !writer) { if (!writer) log('Connect USB first!', 'log-sys'); return; }
+      routineAbort = false;
+      document.getElementById('stopRoutineBtn').style.display = 'inline-block';
+      log(`--- Running Routine: ${app.name}${loop ? ' (LOOP)' : ''} ---`, 'log-sys');
+      do {
+        for (const line of app.gcode.split('\n')) {
+          if (routineAbort) break;
+          const clean = line.split(';')[0].trim();
+          if (clean) await sendAndWait(clean);
+        }
+      } while (loop && !routineAbort && writer);
+      document.getElementById('stopRoutineBtn').style.display = 'none';
+      log(`--- Finished: ${app.name} ---`, 'log-sys');
+    }
+
+    function loadAppToEditor(id) {
       const app = apps.find(a => a.id === id);
       if (!app) return;
-      log(`--- Running App: ${app.name} ---`, 'log-sys');
-      for (const line of app.gcode.split('\n')) {
-        if (line.trim()) {
-          await sendCmd(line);
-          await new Promise(r => setTimeout(r, 120));
-        }
-      }
+      document.getElementById('appName').value = app.name;
+      document.getElementById('appSteps').value = app.gcode;
     }
 
     function deleteApp(id) {
@@ -418,11 +850,13 @@
         div.innerHTML = `
           <div class="app-meta">
             <span class="app-name">${app.name}</span>
-            <span class="app-desc">${app.gcode.split('\n')[0]} (${app.gcode.split('\n').length} cmds)</span>
+            <span class="app-desc">${app.gcode.split('\n').length} steps · ${app.gcode.split('\n')[0]}</span>
           </div>
-          <div class="row">
-            <button class="success small" onclick="runApp('${app.id}')">▶ Run</button>
-            <button class="secondary small" onclick="deleteApp('${app.id}')">🗑</button>
+          <div class="row" style="gap:5px;">
+            <button class="success small" onclick="runApp('${app.id}', false)">▶ Run</button>
+            <button class="secondary small" title="Loop continuously" onclick="runApp('${app.id}', true)">🔁 Loop</button>
+            <button class="secondary small" title="Edit steps" onclick="loadAppToEditor('${app.id}')">✏️</button>
+            <button class="secondary small" title="Delete" onclick="deleteApp('${app.id}')">🗑</button>
           </div>
         `;
         list.appendChild(div);
@@ -440,14 +874,14 @@
     function importDB(e) {
       const file = e.target.files[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
+      const r = new FileReader();
+      r.onload = () => {
         try {
-          const parsed = JSON.parse(reader.result);
+          const parsed = JSON.parse(r.result);
           if (Array.isArray(parsed)) { apps = parsed; persistApps(); }
         } catch { alert('Invalid JSON file'); }
       };
-      reader.readAsText(file);
+      r.readAsText(file);
     }
 
     renderJoints();
