@@ -589,6 +589,7 @@
         <div class="panel-head">
           <div class="panel-title">Live Measured vs. Projected</div>
           <div class="row">
+            <button id="hwSensorBtn" class="sm" onclick="toggleHwSensor()" title="Toggle live TMC2209 UART StallGuard polling">HW Sensor: OFF</button>
             <button class="sm" onclick="calibrateBaseline()" title="Re-baseline unloaded free-spin StallGuard reading">Calibrate</button>
             <button id="pauseGraphBtn" class="sm" onclick="toggleGraphPause()">Freeze</button>
             <button class="sm" onclick="clearTelemetry()">Clear</button>
@@ -699,17 +700,25 @@
     let multiSelectMode = false;
     let stepSize = 15;
     let liveFollow = true;
-    let keyboardMode = true; // Active by default so W+D chorded multi-motor control works right away!
-    let holdInterval = null;
+    let keyboardMode = true;
+    let holdSpinDir = 0; // -1, 0, +1 for Hold CCW / Hold CW buttons
     let sweepRunning = false;
     let routineAbort = false;
-    let okResolvers = [];
-    let liveDragTimer = null;
+    let hwSensorEnabled = false;
 
-    // Simultaneous multi-key & 2D XY pad vector state
+    // Authoritative absolute hardware target coordinates (100% pure G90 — never switches to G91!)
+    const cmdPos = { X: 0, Y: 0, Z: 0, A: 0 };
+
+    // Strict serialized 1-line-at-a-time serial queue + coalesced latest motion slot
+    const cmdQueue = [];
+    let pendingMotion = null; // Overwritten in-place so rapid clicks/drags never build a queue!
+    let serialBusy = false;
+    let currentOkResolver = null;
+
+    // Simultaneous multi-key & 2D XY pad state
     const heldKeys = new Set();
     let padVec = { x: 0, y: 0, active: false };
-    let vectorInFlight = 0;
+    let nextJogStepAt = 0;
 
     // --- REAL-TIME HARDWARE vs PROJECTED MODEL STATE ---
     let graphMode = 'resistance'; // 'resistance' | 'trajectory' | 'velocity' | 'workspace'
@@ -913,37 +922,154 @@
       });
     }
 
-    // --- JOG, HOLD, SWEEP, STOP & RESET (Supports Multi-Motor Lockstep!) ---
-    async function quickSpin(deg, axisOverride = null) {
-      const axes = axisOverride ? [axisOverride] : Array.from(selectedMotors);
-      const parts = axes.map(ax => {
-        const j = JOINTS.find(x => x.id === ax);
-        const signed = (j && j.invert) ? -deg : deg;
-        return `${ax}${signed}`;
-      });
-      await sendCmd('G91');
-      await sendCmd(`G1 ${parts.join(' ')} F${getFeedrate()}`);
-      await sendCmd('G90');
-    }
-
-    let isHoldingSpin = false;
-    async function startHoldSpin(dir, btn) {
-      if (isHoldingSpin) return;
-      isHoldingSpin = true;
-      if (btn) btn.classList.add('holding');
-      // Single continuous smooth move — zero planner segmentation stutter! Stops instantly on release via M410.
-      await quickSpin(dir * 3600);
-    }
-
-    async function stopHoldSpin(btn) {
-      if (btn) btn.classList.remove('holding');
-      if (!isHoldingSpin) return;
-      isHoldingSpin = false;
-      ['X', 'Y', 'Z', 'A'].forEach(ax => { projTarget[ax] = hasHardwareStream ? measPos[ax] : projPos[ax]; });
-      if (writer) {
-        await sendCmd('M410');
-        await sendCmd('G90');
+    // =========================================================================
+    // ROCK-SOLID SERIAL DISPATCHER (Strict 1-Line ok Handshake + Move Coalescing)
+    // =========================================================================
+    function enqueueCmd(line, silent = false) {
+      const clean = line.split(';')[0].trim();
+      if (!clean) return Promise.resolve();
+      interceptProjectedGcode(clean);
+      if (!writer) {
+        if (!silent) log('SIMULATED: ' + clean);
+        return Promise.resolve();
       }
+      return new Promise(resolve => {
+        cmdQueue.push({ line: clean, silent, resolve });
+        pumpSerial();
+      });
+    }
+
+    function scheduleMotion(axesObj, feedrate) {
+      const parts = [];
+      ['X', 'Y', 'Z', 'A'].forEach(ax => {
+        if (axesObj[ax] !== undefined) {
+          const v = Number(axesObj[ax].toFixed(2));
+          cmdPos[ax] = v;
+          projTarget[ax] = v;
+          parts.push(`${ax}${v}`);
+        }
+      });
+      if (!parts.length) return;
+      const gcode = `G1 ${parts.join(' ')} F${Math.max(60, Math.round(feedrate))}`;
+      if (!writer) return;
+      // Coalesce! Overwrite pendingMotion so rapid clicks/sliders NEVER stack up lag!
+      pendingMotion = gcode;
+      pumpSerial();
+    }
+
+    async function pumpSerial() {
+      if (serialBusy || !writer) return;
+      serialBusy = true;
+      try {
+        while (writer && (cmdQueue.length > 0 || pendingMotion !== null)) {
+          let item;
+          // Prioritize control commands, otherwise send the single latest coalesced motion!
+          if (cmdQueue.length > 0) {
+            item = cmdQueue.shift();
+          } else {
+            const m = pendingMotion;
+            pendingMotion = null;
+            item = { line: m, silent: false, resolve: null };
+          }
+          if (!item.silent) log('>> ' + item.line, 'tx');
+          await sendOneLineWaitOk(item.line, item.timeoutMs || 2000);
+          if (item.resolve) item.resolve();
+        }
+      } catch (err) {
+        log('SERIAL WRITE ERR: ' + err.message);
+      } finally {
+        serialBusy = false;
+      }
+    }
+
+    function sendOneLineWaitOk(line, timeoutMs = 2000) {
+      return new Promise(async resolve => {
+        if (!writer) { resolve(); return; }
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          currentOkResolver = null;
+          resolve();
+        };
+        const timer = setTimeout(finish, timeoutMs);
+        currentOkResolver = () => { clearTimeout(timer); finish(); };
+        try {
+          await writer.write(new TextEncoder().encode(line + '\n'));
+        } catch (e) {
+          clearTimeout(timer);
+          finish();
+        }
+      });
+    }
+
+    function sendCmd(cmd) {
+      return enqueueCmd(cmd, false);
+    }
+
+    function sendAndWait(cmd, timeoutMs = 15000) {
+      // Used by M400 in routines/sweeps where waiting for physical move completion can take >2s
+      const clean = cmd.split(';')[0].trim();
+      if (!clean) return Promise.resolve();
+      interceptProjectedGcode(clean);
+      if (!writer) return Promise.resolve();
+      return new Promise(resolve => {
+        cmdQueue.push({ line: clean, silent: false, resolve, timeoutMs });
+        pumpSerial();
+      });
+    }
+
+    async function toggleHwSensor() {
+      hwSensorEnabled = !hwSensorEnabled;
+      const btn = document.getElementById('hwSensorBtn');
+      btn.textContent = `HW Sensor: ${hwSensorEnabled ? 'ON' : 'OFF'}`;
+      btn.classList.toggle('active-state', hwSensorEnabled);
+      if (writer) {
+        if (hwSensorEnabled) await enqueueCmd('M122 P300 Q', true);
+        else {
+          await enqueueCmd('M122 S0', true);
+          hasHardwareStream = false;
+          document.getElementById('telemPill').classList.remove('online', 'warn');
+          document.getElementById('telemText').textContent = 'SENSOR: MODELLED';
+        }
+      }
+    }
+
+    function syncSlidersFromCmdPos() {
+      ['X', 'Y', 'Z', 'A'].forEach(ax => {
+        const j = JOINTS.find(it => it.id === ax);
+        if (!j) return;
+        const uiVal = Math.round(j.invert ? -cmdPos[ax] : cmdPos[ax]);
+        j.val = uiVal;
+        const sl = document.getElementById(`slider-${ax}`);
+        const vl = document.getElementById(`val-${ax}`);
+        if (sl) sl.value = Math.max(j.min, Math.min(j.max, uiVal));
+        if (vl) vl.textContent = `${uiVal}°`;
+      });
+    }
+
+    // --- JOG, HOLD, SWEEP, STOP & RESET (100% Pure G90 Absolute — Zero Runaways!) ---
+    function quickSpin(deg, axisOverride = null) {
+      const axes = axisOverride ? [axisOverride] : Array.from(selectedMotors);
+      const move = {};
+      axes.forEach(ax => {
+        const j = JOINTS.find(x => x.id === ax);
+        if (j && !j.enabled) toggleAxisEnabled(ax, true);
+        const signed = (j && j.invert) ? -deg : deg;
+        move[ax] = cmdPos[ax] + signed;
+      });
+      scheduleMotion(move, getFeedrate());
+      syncSlidersFromCmdPos();
+    }
+
+    function startHoldSpin(dir, btn) {
+      holdSpinDir = dir;
+      if (btn) btn.classList.add('holding');
+    }
+
+    function stopHoldSpin(btn) {
+      if (btn) btn.classList.remove('holding');
+      holdSpinDir = 0;
     }
 
     async function toggleSweep() {
@@ -952,22 +1078,20 @@
         sweepRunning = false;
         btn.textContent = 'Sweep Loop';
         btn.classList.remove('active');
-        await quickStop();
         return;
       }
       const amp = Math.abs(Number(document.getElementById('customDeg').value || 180));
       sweepRunning = true;
       btn.textContent = 'Stop Sweep';
       btn.classList.add('active');
-      log(`SWEEP START: +/-${amp} deg on ${selectedMotor}`);
+      log(`SWEEP START: +/-${amp} deg`);
       while (sweepRunning) {
-        await quickSpin(amp);
-        if (writer) await sendAndWait('M400');
-        else await new Promise(r => setTimeout(r, (amp / getSpeedDegSec()) * 1000 + 150));
+        quickSpin(amp);
+        const waitMs = Math.max(250, (amp / getSpeedDegSec()) * 1000 + 180);
+        await new Promise(r => setTimeout(r, waitMs));
         if (!sweepRunning) break;
-        await quickSpin(-amp);
-        if (writer) await sendAndWait('M400');
-        else await new Promise(r => setTimeout(r, (amp / getSpeedDegSec()) * 1000 + 150));
+        quickSpin(-amp);
+        await new Promise(r => setTimeout(r, waitMs));
       }
       sweepRunning = false;
       btn.textContent = 'Sweep Loop';
@@ -977,47 +1101,49 @@
     async function quickStop() {
       sweepRunning = false;
       routineAbort = true;
-      if (holdInterval) { clearInterval(holdInterval); holdInterval = null; }
-      okResolvers.splice(0).forEach(r => r());
-      ['X', 'Y', 'Z', 'A'].forEach(ax => { projTarget[ax] = hasHardwareStream ? measPos[ax] : projPos[ax]; });
+      holdSpinDir = 0;
+      clearAllHeldKeys();
+      pendingMotion = null;
+      cmdQueue.splice(0).forEach(it => it.resolve && it.resolve());
       if (writer) {
-        await sendCmd('M410');
-        await sendCmd('G90');
+        await enqueueCmd('M410', false);
+        await enqueueCmd('M114', true);
       }
-      log('STOPPED [M410]');
+      log('STOPPED');
     }
 
     async function softReset() {
       sweepRunning = false;
       routineAbort = true;
-      if (holdInterval) { clearInterval(holdInterval); holdInterval = null; }
-      okResolvers.splice(0).forEach(r => r());
+      holdSpinDir = 0;
+      clearAllHeldKeys();
+      pendingMotion = null;
+      cmdQueue.splice(0).forEach(it => it.resolve && it.resolve());
       document.getElementById('sweepBtn').textContent = 'Sweep Loop';
       document.getElementById('sweepBtn').classList.remove('active');
       document.getElementById('routineStatusRow').style.display = 'none';
       JOINTS.forEach(j => { j.val = j.id === 'G' ? 90 : 0; });
-      ['X', 'Y', 'Z', 'A'].forEach(ax => { projTarget[ax] = 0; projPos[ax] = 0; measPos[ax] = 0; });
+      ['X', 'Y', 'Z', 'A'].forEach(ax => { cmdPos[ax] = 0; projTarget[ax] = 0; projPos[ax] = 0; measPos[ax] = 0; });
       renderJoints();
       if (writer) {
-        await sendCmd('M999');
-        await sendCmd('M410');
-        await sendCmd('G90');
-        await sendCmd('G92 X0 Y0 Z0 A0');
-        await sendCmd('M122 P150 Q');
+        await enqueueCmd('M999', false);
+        await enqueueCmd('G90', true);
+        await enqueueCmd('G92 X0 Y0 Z0 A0', false);
+        await enqueueCmd('M122 S0', true);
       }
-      log('SYSTEM RESET COMPLETE [M999 / G90 / G92]');
+      log('SYSTEM RESET COMPLETE');
     }
 
     async function rebootBoard() {
       if (!writer) { log('OFFLINE: Connect USB first.'); return; }
       if (confirm('Reboot SKR Mini E3 V3.0 MCU (M997)? Reconnect USB after 3 seconds.')) {
-        await sendCmd('M997');
+        await enqueueCmd('M997', false);
       }
     }
 
     async function hardEstop() {
       if (confirm('Emergency Kill (M112) halts the controller until Reset. Proceed?')) {
-        await sendCmd('M112');
+        await enqueueCmd('M112', false);
       }
     }
 
@@ -1070,90 +1196,76 @@
     async function zeroSingle(id) {
       const j = JOINTS.find(x => x.id === id);
       j.val = id === 'G' ? 90 : 0;
-      if (id !== 'G') { projTarget[id] = 0; projPos[id] = 0; measPos[id] = 0; }
+      if (id !== 'G') { cmdPos[id] = 0; projTarget[id] = 0; projPos[id] = 0; measPos[id] = 0; }
       renderJoints();
       if (!writer) return;
-      if (id === 'G') await sendCmd('M280 P0 S90');
-      else await sendCmd(`G92 ${id}0`);
+      if (id === 'G') await enqueueCmd('M280 P0 S90');
+      else await enqueueCmd(`G92 ${id}0`);
     }
 
     function onSliderInput(id, val) {
       const j = JOINTS.find(x => x.id === id);
       j.val = Number(val);
       document.getElementById(`val-${id}`).textContent = `${j.val}°`;
-      if (id !== 'G' && j.enabled) projTarget[id] = hwAngle(j, j.val);
-      if (liveFollow && writer && j.enabled) {
-        if (liveDragTimer) clearTimeout(liveDragTimer);
-        liveDragTimer = setTimeout(() => sendSingleJoint(j, true), 65);
+      if (id !== 'G' && j.enabled) {
+        const hw = hwAngle(j, j.val);
+        if (liveFollow) scheduleMotion({ [id]: hw }, getFeedrate());
+        else projTarget[id] = hw;
+      } else if (id === 'G' && liveFollow && j.enabled && writer) {
+        enqueueCmd(`M280 P0 S${j.val}`);
       }
     }
 
-    async function sendSingleJoint(j, flushPrev = false) {
-      if (!j.enabled) return;
-      if (j.id !== 'G') projTarget[j.id] = hwAngle(j, j.val);
-      if (!writer) return;
-      if (j.id === 'G') await sendCmd(`M280 P0 S${j.val}`);
-      else {
-        if (flushPrev) await writer.write(new TextEncoder().encode(`M410\nG90\nG1 ${j.id}${hwAngle(j, j.val)} F${getFeedrate()}\n`));
-        else await sendCmd(`G1 ${j.id}${hwAngle(j, j.val)} F${getFeedrate()}`);
-      }
-    }
-
-    async function jog(id, delta) {
+    function jog(id, delta) {
       const j = JOINTS.find(x => x.id === id);
       j.val = Math.max(j.min, Math.min(j.max, j.val + delta));
       document.getElementById(`slider-${id}`).value = j.val;
       document.getElementById(`val-${id}`).textContent = `${j.val}°`;
       if (!j.enabled) toggleAxisEnabled(id, true);
-      await sendSingleJoint(j);
+      if (id === 'G') {
+        if (writer) enqueueCmd(`M280 P0 S${j.val}`);
+      } else {
+        scheduleMotion({ [id]: hwAngle(j, j.val) }, getFeedrate());
+      }
     }
 
-    async function toggleGripperQuick() {
+    function toggleGripperQuick() {
       const g = JOINTS.find(x => x.id === 'G');
       g.val = g.val > 90 ? 35 : 135;
       renderJoints();
-      if (writer) await sendCmd(`M280 P0 S${g.val}`);
+      if (writer) enqueueCmd(`M280 P0 S${g.val}`);
     }
 
-    async function resetPoseZero() {
+    function resetPoseZero() {
       JOINTS.forEach(j => { j.val = j.id === 'G' ? 90 : 0; });
-      ['X', 'Y', 'Z', 'A'].forEach(ax => { projTarget[ax] = 0; });
       renderJoints();
-      if (writer) await sendAllEnabledJoints();
+      sendAllEnabledJoints();
     }
 
-    async function sendAllEnabledJoints() {
-      const parts = [];
+    function sendAllEnabledJoints() {
+      const move = {};
       JOINTS.forEach(j => {
-        if (j.enabled && j.id !== 'G') {
-          const hw = hwAngle(j, j.val);
-          projTarget[j.id] = hw;
-          parts.push(`${j.id}${hw}`);
-        }
+        if (j.enabled && j.id !== 'G') move[j.id] = hwAngle(j, j.val);
       });
-      if (!writer) return;
-      if (parts.length > 0) {
-        await sendCmd('G90');
-        await sendCmd(`G1 ${parts.join(' ')} F${getFeedrate()}`);
-      }
+      scheduleMotion(move, getFeedrate());
       const g = JOINTS.find(x => x.id === 'G');
-      if (g && g.enabled) await sendCmd(`M280 P0 S${g.val}`);
+      if (g && g.enabled && writer) enqueueCmd(`M280 P0 S${g.val}`);
     }
 
     async function sendZero() {
-      ['X', 'Y', 'Z', 'A'].forEach(ax => { projTarget[ax] = 0; projPos[ax] = 0; measPos[ax] = 0; });
+      ['X', 'Y', 'Z', 'A'].forEach(ax => { cmdPos[ax] = 0; projTarget[ax] = 0; projPos[ax] = 0; measPos[ax] = 0; });
       JOINTS.forEach(j => { if (j.id !== 'G') j.val = 0; });
       renderJoints();
-      if (writer) await sendCmd('G92 X0 Y0 Z0 A0');
+      if (writer) await enqueueCmd('G92 X0 Y0 Z0 A0');
     }
 
     // --- SYSTEM CONFIGURATION ---
     async function setDriveSteps(mode) {
       if (mode === 'bench') {
-        await sendCmd('M92 X8.889 Y8.889 Z8.889 A8.889');
+        await enqueueCmd('M92 X8.889 Y8.889 Z8.889 A8.889');
         log('STEPS/DEG: 1:1 Bench Mode (8.889)');
       } else {
-        await sendCmd('M92 X8.889 Y35.556 Z35.556 A8.889');
+        await enqueueCmd('M92 X8.889 Y35.556 Z35.556 A8.889');
         log('STEPS/DEG: 4:1 Geared Mode (J2/J3 = 35.556)');
       }
     }
@@ -1162,90 +1274,23 @@
       const ma = prompt('Stepper RMS current in mA (600 recommended for 42-34 motors):', '600');
       if (!ma) return;
       const v = Math.max(300, Math.min(1000, parseInt(ma, 10) || 600));
-      await sendCmd(`M906 X${v} Y${v} Z${v} A${Math.min(v, 600)}`);
+      await enqueueCmd(`M906 X${v} Y${v} Z${v} A${Math.min(v, 600)}`);
     }
 
     async function setAccelPrompt() {
-      const acc = prompt('Acceleration in deg/s^2 (150-400 recommended):', '200');
+      const acc = prompt('Acceleration in deg/s^2 (400-1000 recommended):', '800');
       if (!acc) return;
-      const v = Math.max(20, Math.min(3000, parseInt(acc, 10) || 200));
-      await sendCmd(`M204 P${v} T${v}`);
+      const v = Math.max(20, Math.min(3000, parseInt(acc, 10) || 800));
+      await enqueueCmd(`M204 P${v} T${v}`);
     }
 
-    // --- ZERO-LAG STATE-CHANGE MULTI-MOTOR VECTOR ENGINE ---
-    // Instead of flooding Marlin's 16-block planner buffer with tiny slices, we send ONE continuous
-    // multi-axis G1 vector whenever the held key combination changes, and M410 instant-stop on release!
+    // =========================================================================
+    // WALL-CLOCK PACED MULTI-MOTOR JOG ENGINE (W+D Keys, Hold Buttons, XY Pad)
+    // =========================================================================
     const KEY_MAP = {
       arrowleft: 'a', arrowright: 'd', arrowup: 'w', arrowdown: 's',
       a: 'a', d: 'd', w: 'w', s: 's', q: 'q', e: 'e', z: 'z', c: 'c'
     };
-
-    let activeVecSig = '0,0,0,0';
-    let vecTxBusy = false;
-    let pendingVecApply = false;
-    let lastPadUpdateMs = 0;
-
-    function computeDesiredVector() {
-      let vx = (heldKeys.has('d') ? 1 : 0) - (heldKeys.has('a') ? 1 : 0);
-      let vy = (heldKeys.has('w') ? 1 : 0) - (heldKeys.has('s') ? 1 : 0);
-      let vz = (heldKeys.has('e') ? 1 : 0) - (heldKeys.has('q') ? 1 : 0);
-      let va = (heldKeys.has('c') ? 1 : 0) - (heldKeys.has('z') ? 1 : 0);
-      if (padVec.active) {
-        vx = Math.abs(padVec.x) > 0.12 ? Number(padVec.x.toFixed(1)) : vx;
-        vy = Math.abs(padVec.y) > 0.12 ? Number(padVec.y.toFixed(1)) : vy;
-      }
-      return { X: vx, Y: vy, Z: vz, A: va };
-    }
-
-    async function applyVectorMotion() {
-      if (vecTxBusy) { pendingVecApply = true; return; }
-      vecTxBusy = true;
-      try {
-        const vec = computeDesiredVector();
-        const sig = `${vec.X},${vec.Y},${vec.Z},${vec.A}`;
-        if (sig === activeVecSig) return;
-        const wasMoving = activeVecSig !== '0,0,0,0';
-        activeVecSig = sig;
-
-        if (sig === '0,0,0,0') {
-          // All keys released -> instant stop (<5ms, zero queued blocks!) + sync exact angle
-          ['X', 'Y', 'Z', 'A'].forEach(ax => { projTarget[ax] = hasHardwareStream ? measPos[ax] : projPos[ax]; });
-          if (writer && wasMoving) {
-            await writer.write(new TextEncoder().encode('M410\nG90\nM114\n'));
-          }
-          return;
-        }
-
-        const spd = getSpeedDegSec();
-        const parts = [];
-        let magSq = 0;
-        ['X', 'Y', 'Z', 'A'].forEach(ax => {
-          const v = vec[ax];
-          if (v === 0) return;
-          const j = JOINTS.find(it => it.id === ax);
-          if (j && !j.enabled) toggleAxisEnabled(ax, true);
-          const dirSign = (j && j.invert) ? -v : v;
-          // Continuous 3600-deg vector glide scaled proportionally per axis!
-          const dist = Number((dirSign * 3600).toFixed(1));
-          projTarget[ax] = (hasHardwareStream ? measPos[ax] : projPos[ax]) + dist;
-          parts.push(`${ax}${dist}`);
-          magSq += (v * spd) * (v * spd);
-        });
-
-        const feed = Math.max(60, Math.round(Math.sqrt(magSq) * 60));
-        if (writer) {
-          // If changing direction/chord mid-move (e.g. D -> W+D), flush old vector with M410 & launch new vector immediately!
-          const prefix = wasMoving ? 'M410\n' : '';
-          await writer.write(new TextEncoder().encode(`${prefix}G91\nG1 ${parts.join(' ')} F${feed}\nG90\n`));
-        }
-      } finally {
-        vecTxBusy = false;
-        if (pendingVecApply) {
-          pendingVecApply = false;
-          applyVectorMotion();
-        }
-      }
-    }
 
     function updateKeyCapUI() {
       ['w', 'a', 's', 'd', 'q', 'e', 'z', 'c'].forEach(k => {
@@ -1258,20 +1303,16 @@
       if (heldKeys.has(k)) return;
       heldKeys.add(k);
       updateKeyCapUI();
-      applyVectorMotion();
     }
     function vKeyUp(k) {
       if (!heldKeys.has(k)) return;
       heldKeys.delete(k);
       updateKeyCapUI();
-      applyVectorMotion();
     }
     function clearAllHeldKeys() {
-      if (heldKeys.size === 0 && !padVec.active) return;
       heldKeys.clear();
       padVec = { x: 0, y: 0, active: false };
       updateKeyCapUI();
-      applyVectorMotion();
     }
 
     document.addEventListener('keydown', e => {
@@ -1279,7 +1320,7 @@
       const tag = (e.target && e.target.tagName) || '';
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       const raw = e.key.toLowerCase();
-      if (raw === 'escape') { e.preventDefault(); clearAllHeldKeys(); quickStop(); return; }
+      if (raw === 'escape') { e.preventDefault(); quickStop(); return; }
       if (raw === ' ') { if (!e.repeat) { e.preventDefault(); toggleGripperQuick(); } return; }
       const mapped = KEY_MAP[raw];
       if (mapped) {
@@ -1296,38 +1337,80 @@
       }
     });
 
-    window.addEventListener('blur', clearAllHeldKeys);
+    window.addEventListener('blur', () => { holdSpinDir = 0; clearAllHeldKeys(); });
 
-    // 2D XY Vector Pad pointer tracking
     (function initXYPad() {
       const pad = document.getElementById('xyPad');
       const puck = document.getElementById('xyPuck');
       if (!pad) return;
-      function updatePad(e, force = false) {
+      function updatePad(e) {
         const r = pad.getBoundingClientRect();
         const nx = Math.max(-1, Math.min(1, ((e.clientX - r.left) / r.width) * 2 - 1));
         const ny = Math.max(-1, Math.min(1, 1 - ((e.clientY - r.top) / r.height) * 2));
         padVec = { x: nx, y: ny, active: true };
         puck.style.left = `${(nx + 1) * 50}%`;
         puck.style.top = `${(1 - ny) * 50}%`;
-        const now = performance.now();
-        if (force || now - lastPadUpdateMs > 140) {
-          lastPadUpdateMs = now;
-          applyVectorMotion();
-        }
       }
       function releasePad() {
-        if (!padVec.active) return;
         padVec = { x: 0, y: 0, active: false };
         puck.style.left = '50%';
         puck.style.top = '50%';
-        applyVectorMotion();
       }
-      pad.addEventListener('pointerdown', e => { pad.setPointerCapture(e.pointerId); updatePad(e, true); });
-      pad.addEventListener('pointermove', e => { if (padVec.active) updatePad(e, false); });
+      pad.addEventListener('pointerdown', e => { pad.setPointerCapture(e.pointerId); updatePad(e); });
+      pad.addEventListener('pointermove', e => { if (padVec.active) updatePad(e); });
       pad.addEventListener('pointerup', releasePad);
       pad.addEventListener('pointercancel', releasePad);
     })();
+
+    // Runs at 30ms check rate, but strictly wall-clock gated to physical step duration (140ms)
+    // AND serialBusy === false so Marlin NEVER has more than 1 short 0.14s step in flight!
+    setInterval(() => {
+      const now = performance.now();
+      if (now < nextJogStepAt) return;
+      if (writer && (serialBusy || pendingMotion !== null)) return;
+
+      let vx = (heldKeys.has('d') ? 1 : 0) - (heldKeys.has('a') ? 1 : 0);
+      let vy = (heldKeys.has('w') ? 1 : 0) - (heldKeys.has('s') ? 1 : 0);
+      let vz = (heldKeys.has('e') ? 1 : 0) - (heldKeys.has('q') ? 1 : 0);
+      let va = (heldKeys.has('c') ? 1 : 0) - (heldKeys.has('z') ? 1 : 0);
+
+      if (padVec.active) {
+        if (Math.abs(padVec.x) > 0.12) vx = padVec.x;
+        if (Math.abs(padVec.y) > 0.12) vy = padVec.y;
+      }
+
+      if (holdSpinDir !== 0) {
+        selectedMotors.forEach(ax => {
+          if (ax === 'X') vx = holdSpinDir;
+          if (ax === 'Y') vy = holdSpinDir;
+          if (ax === 'Z') vz = holdSpinDir;
+          if (ax === 'A') va = holdSpinDir;
+        });
+      }
+
+      if (vx === 0 && vy === 0 && vz === 0 && va === 0) return;
+
+      const sliceSec = 0.14; // Bounded 140ms move (~16 deg at 120 deg/s) -> stops in <0.14s on keyup!
+      const spd = getSpeedDegSec();
+      const vec = { X: vx, Y: vy, Z: vz, A: va };
+      const move = {};
+      let magSq = 0;
+
+      ['X', 'Y', 'Z', 'A'].forEach(ax => {
+        const v = vec[ax];
+        if (v === 0) return;
+        const j = JOINTS.find(it => it.id === ax);
+        if (j && !j.enabled) toggleAxisEnabled(ax, true);
+        const signedRate = ((j && j.invert) ? -v : v) * spd;
+        move[ax] = cmdPos[ax] + signedRate * sliceSec;
+        magSq += signedRate * signedRate;
+      });
+
+      const vecFeed = Math.sqrt(magSq) * 60;
+      nextJogStepAt = now + (sliceSec * 1000) * 0.88; // Slight 12% overlap for seamless junction blending!
+      scheduleMotion(move, vecFeed);
+      syncSlidersFromCmdPos();
+    }, 30);
 
     // --- SERIAL CONNECTION ---
     async function connectSerial() {
@@ -1343,28 +1426,26 @@
         document.getElementById('statusText').textContent = 'ONLINE // 115200';
         document.getElementById('connectBtn').textContent = 'Connected';
         document.getElementById('connectBtn').classList.remove('primary');
-        document.getElementById('telemText').textContent = 'PROBING TELEMETRY...';
+        document.getElementById('telemText').textContent = 'SENSOR: MODELLED';
         log('LINK ESTABLISHED: SKR MINI E3 V3.0');
         readLoop();
         await writer.write(new TextEncoder().encode('\n'));
-        await new Promise(r => setTimeout(r, 150));
-        await sendCmd('G90');
-        await sendCmd('M84 S0');
-        // Unlock full 360 deg/s speed, crisp 800 deg/s^2 acceleration, and 0.5 deg junction deviation in RAM!
-        await sendCmd('M92 X8.889 Y8.889 Z8.889 A8.889');
-        await sendCmd('M203 X360 Y360 Z360 A360');
-        await sendCmd('M201 X1500 Y1500 Z1500 A1500');
-        await sendCmd('M204 P800 T800');
-        await sendCmd('M205 J0.50');
-        await sendCmd('M569 S1 X Y Z A'); // StealthChop enables StallGuard4 SG_RESULT!
-        await sendCmd('M122 P250 Q');     // Lightweight 4Hz @TELEM stream (zero UART bottleneck)
-        setTimeout(() => {
-          if (!hasHardwareStream && writer) {
-            document.getElementById('telemPill').classList.add('warn');
-            document.getElementById('telemText').textContent = 'FLASH NEW FIRMWARE.BIN FOR STALLGUARD';
-            log('NOTE: Flash updated firmware.bin to microSD to enable live TMC2209 StallGuard resistance streaming.');
-          }
-        }, 1800);
+        await new Promise(r => setTimeout(r, 200));
+        // Strictly serialized setup — every command waits for Marlin 'ok'!
+        await enqueueCmd('M999', true);
+        await enqueueCmd('M122 S0', true); // Silence any background UART chatter first!
+        await enqueueCmd('G90', true);
+        await enqueueCmd('G92 X0 Y0 Z0 A0', true);
+        await enqueueCmd('M84 S0', true);
+        await enqueueCmd('M92 X8.889 Y8.889 Z8.889 A8.889', true);
+        await enqueueCmd('M203 X360 Y360 Z360 A360', true);
+        await enqueueCmd('M201 X1500 Y1500 Z1500 A1500', true);
+        await enqueueCmd('M204 P800 T800', true);
+        await enqueueCmd('M205 J0.50', true);
+        await enqueueCmd('M569 S1 X Y Z A', true);
+        ['X', 'Y', 'Z', 'A'].forEach(ax => { cmdPos[ax] = 0; projTarget[ax] = 0; projPos[ax] = 0; measPos[ax] = 0; });
+        syncSlidersFromCmdPos();
+        log('READY: 360 deg/s unlocked, pure G90 sync active.');
       } catch (err) {
         log('CONNECTION ERROR: ' + err.message);
       }
@@ -1385,7 +1466,6 @@
           lines.forEach(raw => {
             const l = raw.trim();
             if (!l) return;
-            // Intercept high-rate @TELEM & periodic driver lines silently so console stays clean!
             if (l.startsWith('@TELEM')) {
               parseHardwareTelem(l);
               return;
@@ -1393,29 +1473,19 @@
             if (/^[XYZI]:\d+.*\|/.test(l) || l.startsWith('axis:pwm_scale')) {
               return;
             }
-            // Parse M114 position sync reply (e.g. "X:12.50 Y:-30.00 Z:0.00 A:0.00 Count ...")
             const m114 = l.match(/^X:(-?\d+\.?\d*)\s+Y:(-?\d+\.?\d*)\s+Z:(-?\d+\.?\d*)\s+A:(-?\d+\.?\d*)/);
             if (m114) {
-              const coords = { X: Number(m114[1]), Y: Number(m114[2]), Z: Number(m114[3]), A: Number(m114[4]) };
-              ['X', 'Y', 'Z', 'A'].forEach(ax => {
-                measPos[ax] = coords[ax];
-                projPos[ax] = coords[ax];
-                projTarget[ax] = coords[ax];
-                const j = JOINTS.find(it => it.id === ax);
-                if (j) {
-                  const uiVal = Math.round(j.invert ? -coords[ax] : coords[ax]);
-                  j.val = Math.max(j.min, Math.min(j.max, uiVal));
-                  const sl = document.getElementById(`slider-${ax}`);
-                  const vl = document.getElementById(`val-${ax}`);
-                  if (sl) sl.value = j.val;
-                  if (vl) vl.textContent = `${j.val}°`;
-                }
+              ['X', 'Y', 'Z', 'A'].forEach((ax, idx) => {
+                const v = Number(m114[idx + 1]);
+                cmdPos[ax] = v; measPos[ax] = v; projPos[ax] = v; projTarget[ax] = v;
               });
+              syncSlidersFromCmdPos();
             }
-            log('<< ' + l, 'rx');
-            if (l.startsWith('ok') && okResolvers.length > 0) {
-              okResolvers.shift()();
+            if (l.startsWith('ok')) {
+              if (currentOkResolver) currentOkResolver();
+              return;
             }
+            if (!l.startsWith('echo:busy:')) log('<< ' + l, 'rx');
           });
         }
       } catch (err) {
@@ -1427,27 +1497,10 @@
         document.getElementById('connectBtn').textContent = 'Connect USB';
         document.getElementById('connectBtn').classList.add('primary');
         hasHardwareStream = false;
+        serialBusy = false;
         writer = null;
         log('DISCONNECTED: ' + err.message);
       }
-    }
-
-    async function sendCmd(cmd) {
-      const clean = cmd.split(';')[0].trim();
-      if (!clean) return;
-      interceptProjectedGcode(clean);
-      if (!writer) { log('SIMULATED: ' + clean); return; }
-      if (!clean.startsWith('M122 P')) log('>> ' + clean, 'tx');
-      await writer.write(new TextEncoder().encode(clean + '\n'));
-    }
-
-    function sendAndWait(cmd, timeoutMs = 15000) {
-      return new Promise(async resolve => {
-        if (!writer) { resolve(); return; }
-        const timer = setTimeout(resolve, timeoutMs);
-        okResolvers.push(() => { clearTimeout(timer); resolve(); });
-        await sendCmd(cmd);
-      });
     }
 
     function sendManualGcode() {
