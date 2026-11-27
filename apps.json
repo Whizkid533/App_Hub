@@ -2,7 +2,7 @@
   {
     "name": "Filament Lab 3D",
     "category": "Tools",
-    "desc": "Stress Simulator for 3d Prints",
+    "desc": "Stress Simulator for 3D Prints",
     "path": "./sample-app/index.html"
   },
   {
@@ -11,10 +11,10 @@
     "desc": "Duct Simulator for MEP Engineering",
     "path": "./MEP-app/index.html"
   },
-    {
+  {
     "name": "DUMME",
     "category": "Tools",
-    "desc": "Duct Simulator for MEP Engineering",
+    "desc": "YOUR_DUMME_DESCRIPTION_HERE",
     "path": "./DUMME-App/index.html"
   }
 ]
