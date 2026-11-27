@@ -16,5 +16,11 @@
     "category": "Tools",
     "desc": "YOUR_DUMME_DESCRIPTION_HERE",
     "path": "./DUMME-App/index.html"
+  },
+  {
+    "name": "Ender-Arm Control Panel",
+    "category": "Robotics",
+    "desc": "USB Web Serial controller & routine database for the Ender 3 V2 robot arm",
+    "path": "./ender-arm/index.html"
   }
 ]
