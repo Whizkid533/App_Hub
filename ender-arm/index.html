@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ENDER-ARM // Real-Time Control & Resistance Telemetry</title>
+  <title>ENDER-ARM // Robotics Studio, 3D Twin &amp; Telemetry</title>
   <style>
     :root {
       --bg: #070707;
@@ -25,8 +25,8 @@
       font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       font-size: 13px;
       line-height: 1.4;
-      padding: 20px 24px 40px;
-      max-width: 1340px;
+      padding: 18px 24px 40px;
+      max-width: 1400px;
       margin: 0 auto;
       -webkit-font-smoothing: antialiased;
     }
@@ -36,12 +36,12 @@
       flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      gap: 16px;
-      padding-bottom: 16px;
+      gap: 14px;
+      padding-bottom: 14px;
       border-bottom: 1px solid var(--border);
-      margin-bottom: 18px;
+      margin-bottom: 16px;
     }
-    .brand { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .brand { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .brand-title { font-size: 14px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
     .brand-title span { color: var(--red); }
     .status-pill {
@@ -60,7 +60,7 @@
     .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #444; }
     .status-pill.online { color: var(--white); border-color: var(--border-hi); }
     .status-pill.online .status-dot { background: var(--red); box-shadow: 0 0 8px var(--red); }
-    .status-pill.warn { border-color: var(--red); color: var(--red); }
+    .status-pill.warn { border-color: var(--red); color: var(--red); background: var(--red-dim); }
 
     .toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 
@@ -68,7 +68,7 @@
       background: var(--panel-sub);
       color: var(--white);
       border: 1px solid var(--border);
-      padding: 7px 13px;
+      padding: 7px 12px;
       font-size: 11px;
       font-weight: 600;
       letter-spacing: 0.06em;
@@ -88,23 +88,47 @@
     button.active-state { border-color: var(--red); background: var(--red-dim); color: #fff; }
     button.sm { padding: 5px 9px; font-size: 10px; }
 
+    /* TOP QUICK-POSE & TCP HUD BAR */
+    .hud-strip {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      margin-bottom: 16px;
+    }
+    .tcp-readout {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-family: var(--mono);
+      font-size: 11px;
+      flex-wrap: wrap;
+    }
+    .tcp-item span { color: var(--muted); font-size: 10px; margin-right: 4px; }
+    .tcp-item strong { color: var(--white); }
+    .tcp-item strong.red { color: var(--red); }
+
     .layout {
       display: grid;
-      grid-template-columns: 1.05fr 0.95fr;
+      grid-template-columns: 1.02fr 0.98fr;
       gap: 18px;
       align-items: start;
     }
-    @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } }
+    @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } }
 
     .col { display: flex; flex-direction: column; gap: 18px; }
 
     .panel {
       background: var(--panel);
       border: 1px solid var(--border);
-      padding: 16px;
+      padding: 15px;
       display: flex;
       flex-direction: column;
-      gap: 13px;
+      gap: 12px;
     }
     .panel-head {
       display: flex;
@@ -112,7 +136,7 @@
       align-items: center;
       gap: 8px;
       flex-wrap: wrap;
-      padding-bottom: 10px;
+      padding-bottom: 9px;
       border-bottom: 1px solid var(--border);
     }
     .panel-title {
@@ -135,22 +159,30 @@
     .muted { color: var(--muted); font-size: 11px; }
     .mono { font-family: var(--mono); }
 
-    .motor-tabs, .graph-tabs {
+    .motor-tabs {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 6px;
     }
+    .graph-tabs {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 5px;
+    }
+    @media (max-width: 680px) { .graph-tabs { grid-template-columns: repeat(3, 1fr); } }
+
     .tab {
       background: var(--bg);
       color: var(--muted);
       border: 1px solid var(--border);
-      padding: 8px 5px;
+      padding: 8px 4px;
       text-align: center;
       font-size: 10px;
       font-weight: 700;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
       cursor: pointer;
+      user-select: none;
     }
     .tab:hover { color: var(--white); border-color: var(--border-hi); }
     .tab.active {
@@ -162,7 +194,7 @@
 
     .hold-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .hold-btn {
-      padding: 11px;
+      padding: 10px;
       background: var(--bg);
       border: 1px solid var(--border-hi);
       font-size: 11px;
@@ -178,7 +210,7 @@
       background: var(--bg);
       color: var(--white);
       border: 1px solid var(--border);
-      padding: 7px 9px;
+      padding: 6px 9px;
       font-size: 12px;
       font-family: var(--mono);
       outline: none;
@@ -204,14 +236,14 @@
       cursor: pointer;
     }
 
-    .axis-list { display: flex; flex-direction: column; gap: 8px; }
+    .axis-list { display: flex; flex-direction: column; gap: 7px; }
     .axis-row {
       background: var(--bg);
       border: 1px solid var(--border);
-      padding: 9px 12px;
+      padding: 8px 11px;
       display: flex;
       flex-direction: column;
-      gap: 7px;
+      gap: 6px;
     }
     .axis-row.disabled { opacity: 0.4; }
     .axis-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
@@ -224,7 +256,7 @@
       align-items: center;
       gap: 8px;
     }
-    .axis-meta { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--muted); }
+    .axis-meta { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); }
     .axis-meta label {
       display: inline-flex;
       align-items: center;
@@ -239,24 +271,53 @@
       font-size: 12px;
       font-weight: 700;
       color: var(--white);
-      min-width: 52px;
+      min-width: 50px;
       text-align: right;
     }
     .axis-ctrl { display: flex; align-items: center; gap: 8px; }
     input[type="checkbox"] { accent-color: var(--red); cursor: pointer; }
 
-    /* TELEMETRY GRAPH CANVAS */
+    /* IK CARTESIAN GRID */
+    .ik-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 7px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+    }
+    .ik-row {
+      display: grid;
+      grid-template-columns: 54px 40px 1fr 40px 58px;
+      gap: 6px;
+      align-items: center;
+    }
+    .ik-lbl { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--white); }
+    .ik-lbl span { color: var(--red); }
+
+    /* TELEMETRY & 3D TWIN CANVAS */
     .canvas-wrap {
       position: relative;
       background: #050505;
       border: 1px solid var(--border);
-      height: 235px;
+      height: 275px;
       width: 100%;
+      touch-action: none;
     }
     canvas#telemetryCanvas {
       width: 100%;
       height: 100%;
       display: block;
+    }
+    .canvas-overlay-hint {
+      position: absolute;
+      bottom: 6px;
+      left: 10px;
+      font-family: var(--mono);
+      font-size: 9px;
+      color: #666;
+      pointer-events: none;
+      letter-spacing: 0.04em;
     }
     .telemetry-metrics {
       display: grid;
@@ -277,6 +338,21 @@
     .metric-val { color: var(--white); font-weight: 700; font-size: 11px; }
     .metric-val.accent-txt { color: var(--red); }
 
+    /* SAFETY GUARD BAR */
+    .guard-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 7px 10px;
+      flex-wrap: wrap;
+    }
+    .guard-bar.tripped {
+      border-color: var(--red);
+      background: var(--red-dim);
+    }
+
     details { border-top: 1px solid var(--border); padding-top: 10px; }
     summary {
       font-size: 11px;
@@ -288,13 +364,37 @@
       user-select: none;
     }
     summary:hover { color: var(--white); }
-    .drawer-body { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+    .drawer-body { margin-top: 10px; display: flex; flex-direction: column; gap: 9px; }
 
-    .routine-list { display: flex; flex-direction: column; gap: 6px; max-height: 195px; overflow-y: auto; }
+    /* TEACH PENDANT WAYPOINTS */
+    .waypoint-strip {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .wp-chip {
+      flex: 0 0 auto;
+      background: var(--bg);
+      border: 1px solid var(--border-hi);
+      padding: 5px 8px;
+      font-family: var(--mono);
+      font-size: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+    .wp-chip:hover { border-color: var(--white); }
+    .wp-chip.active-wp { border-color: var(--red); background: var(--red-dim); }
+    .wp-del { color: var(--muted); font-weight: 700; cursor: pointer; padding: 0 2px; }
+    .wp-del:hover { color: var(--red); }
+
+    .routine-list { display: flex; flex-direction: column; gap: 6px; max-height: 175px; overflow-y: auto; }
     .routine-item {
       background: var(--bg);
       border: 1px solid var(--border);
-      padding: 8px 11px;
+      padding: 7px 10px;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -307,29 +407,17 @@
     .terminal {
       background: #050505;
       border: 1px solid var(--border);
-      padding: 10px;
-      height: 135px;
+      padding: 9px;
+      height: 125px;
       overflow-y: auto;
       font-family: var(--mono);
       font-size: 11px;
-      line-height: 1.5;
+      line-height: 1.45;
       white-space: pre-wrap;
     }
     .tx { color: var(--white); }
     .rx { color: #7a7a7a; }
     .sys { color: var(--red); }
-
-    .kbd-bar {
-      display: none;
-      background: var(--panel);
-      border: 1px solid var(--red);
-      padding: 8px 12px;
-      margin-bottom: 16px;
-      font-family: var(--mono);
-      font-size: 11px;
-      color: var(--white);
-    }
-    .kbd-bar.visible { display: block; }
 
     /* MULTI-AXIS WASD HUD & 2D VECTOR PAD */
     .vector-deck {
@@ -339,7 +427,7 @@
       align-items: center;
       background: var(--bg);
       border: 1px solid var(--border);
-      padding: 10px 12px;
+      padding: 9px 12px;
     }
     .key-clusters {
       display: flex;
@@ -350,13 +438,13 @@
     .wasd-grid {
       display: grid;
       grid-template-columns: repeat(3, 34px);
-      grid-template-rows: repeat(2, 32px);
+      grid-template-rows: repeat(2, 30px);
       gap: 4px;
     }
     .aux-keys {
       display: grid;
       grid-template-columns: repeat(2, 42px);
-      grid-template-rows: repeat(2, 32px);
+      grid-template-rows: repeat(2, 30px);
       gap: 4px;
     }
     .kcap {
@@ -385,7 +473,7 @@
     .xy-pad {
       position: relative;
       width: 122px;
-      height: 92px;
+      height: 86px;
       background: #050505;
       border: 1px solid var(--border-hi);
       cursor: crosshair;
@@ -431,7 +519,7 @@
 <body>
   <header>
     <div class="brand">
-      <div class="brand-title">ENDER-ARM <span>//</span> CONTROL</div>
+      <div class="brand-title">ENDER-ARM <span>//</span> STUDIO</div>
       <div id="statusPill" class="status-pill">
         <span class="status-dot"></span>
         <span id="statusText">OFFLINE</span>
@@ -439,24 +527,45 @@
       <div id="telemPill" class="status-pill">
         <span id="telemText">SENSOR: SIMULATED</span>
       </div>
+      <div id="padPill" class="status-pill" title="Plug in any Xbox / PlayStation / USB Gamepad and press a button">
+        <span class="status-dot"></span>
+        <span id="padText">GAMEPAD: IDLE</span>
+      </div>
     </div>
 
     <div class="toolbar">
       <button id="connectBtn" class="primary">Connect USB</button>
-      <button id="kbdTopBtn" class="active-state" onclick="toggleKeyboardMode()" title="Hold W/A/S/D/Q/E/Z/C simultaneously to drive multiple motors">Keys: ON</button>
+      <button id="kbdTopBtn" class="active-state" onclick="toggleKeyboardMode()" title="Hold W/A/S/D/Q/E/Z/C simultaneously to drive multiple motors; [T] captures Teach Waypoint; [Space] toggles Gripper">Keys: ON</button>
       <button onclick="sendZero()">Zero [G92]</button>
       <button onclick="resetPoseZero()">Home 0°</button>
       <button onclick="sendCmd('M17')">Lock</button>
       <button onclick="sendCmd('M18')">Free</button>
       <button onclick="softReset()" title="Clear halt state (M999), stop motion, and reset">Reset</button>
-      <button class="accent" onclick="quickStop()" title="Immediate motion stop (M410)">Stop</button>
+      <button class="accent" onclick="quickStop()" title="Immediate motion stop (M410) [Esc]">Stop</button>
     </div>
   </header>
 
-  <div id="kbdBar" class="kbd-bar"></div>
+  <!-- LIVE TCP FORWARD KINEMATICS + INSTANT POSE PRESETS BAR -->
+  <div class="hud-strip">
+    <div class="tcp-readout">
+      <div class="tcp-item"><span>TCP X</span><strong id="hudTcpX">163.0 mm</strong></div>
+      <div class="tcp-item"><span>TCP Y</span><strong id="hudTcpY">0.0 mm</strong></div>
+      <div class="tcp-item"><span>TCP Z</span><strong id="hudTcpZ">212.0 mm</strong></div>
+      <div class="tcp-item"><span>REACH</span><strong id="hudReach" class="red">163.0 mm</strong></div>
+    </div>
+    <div class="row" style="gap:5px;">
+      <span class="muted" style="font-size:10px; letter-spacing:0.06em;">PRESETS:</span>
+      <button class="sm" onclick="applyPosePreset(0, 0, 0, 0, 90)">Home</button>
+      <button class="sm" onclick="applyPosePreset(0, -45, 75, 0, 40)">Park</button>
+      <button class="sm" onclick="applyPosePreset(0, 35, 15, 0, 130)">Reach</button>
+      <button class="sm" onclick="applyPosePreset(45, 52, 22, 0, 35)">Pick R</button>
+      <button class="sm" onclick="applyPosePreset(-45, 52, 22, 0, 135)">Place L</button>
+      <button class="sm outline-red" onclick="captureTeachWaypoint()" title="Capture current joint pose to Teach Strip [Key: T]">+ Teach [T]</button>
+    </div>
+  </div>
 
   <div class="layout">
-    <!-- LEFT COLUMN: MOTOR CONTROLS -->
+    <!-- LEFT COLUMN: JOGGING, INVERSE KINEMATICS & JOINT POSITIONING -->
     <div class="col">
       <div class="panel">
         <div class="panel-head">
@@ -464,17 +573,16 @@
           <div class="row">
             <button id="multiSelBtn" class="sm" onclick="toggleMultiSelectMode()" title="Select multiple motors at once for Spin / Hold / Sweep">Multi: OFF</button>
             <span class="muted">SPEED</span>
-            <input id="speedInput" type="range" min="15" max="360" value="120" style="width:96px;"
+            <input id="speedInput" type="range" min="15" max="360" value="120" style="width:92px;"
               oninput="document.getElementById('speedLbl').textContent = this.value + ' °/s'" />
-            <span id="speedLbl" class="mono" style="width:54px; text-align:right; font-size:11px;">120 °/s</span>
+            <span id="speedLbl" class="mono" style="width:52px; text-align:right; font-size:11px;">120 °/s</span>
           </div>
         </div>
 
-        <!-- SIMULTANEOUS CHORDED KEYBOARD HUD + 2D XY VECTOR PAD -->
         <div class="vector-deck">
           <div>
-            <div class="muted" style="margin-bottom:6px; font-size:10px; letter-spacing:0.04em;">
-              HOLD MULTIPLE KEYS AT ONCE (E.G. <strong style="color:var(--white);">W + D</strong>) OR DRAG XY PAD
+            <div class="muted" style="margin-bottom:5px; font-size:10px; letter-spacing:0.04em;">
+              CHORD KEYS (<strong style="color:var(--white);">W+D+E</strong>), DRAG XY PAD, OR USE USB GAMEPAD STICKS
             </div>
             <div class="key-clusters">
               <div class="wasd-grid">
@@ -483,7 +591,7 @@
                 <div></div>
                 <div class="kcap" id="kcap-a" onpointerdown="vKeyDown('a')" onpointerup="vKeyUp('a')" onpointerleave="vKeyUp('a')">A<small>X-</small></div>
                 <div class="kcap" id="kcap-s" onpointerdown="vKeyDown('s')" onpointerup="vKeyUp('s')" onpointerleave="vKeyUp('s')">S<small>Y-</small></div>
-                <div class="kcap" id="kcap-d" onpointerdown="vKeyDown('d')" onpointerup="vKeyUp('s'); vKeyUp('d')" onpointerleave="vKeyUp('d')">D<small>X+</small></div>
+                <div class="kcap" id="kcap-d" onpointerdown="vKeyDown('d')" onpointerup="vKeyUp('d')" onpointerleave="vKeyUp('d')">D<small>X+</small></div>
               </div>
               <div class="aux-keys">
                 <div class="kcap" id="kcap-q" onpointerdown="vKeyDown('q')" onpointerup="vKeyUp('q')" onpointerleave="vKeyUp('q')">Q<small>Z-</small></div>
@@ -528,14 +636,52 @@
         </div>
 
         <div class="row">
-          <input id="customDeg" type="number" value="360" style="width:84px;" />
+          <input id="customDeg" type="number" value="360" style="width:80px;" />
           <button class="sm" onclick="quickSpin(-Number(document.getElementById('customDeg').value))">Spin -</button>
           <button class="sm primary" onclick="quickSpin(Number(document.getElementById('customDeg').value))">Spin +</button>
           <span class="spacer"></span>
+          <button id="recLiveBtn" class="sm" onclick="toggleLiveRecording()" title="Record your real-time manual motion into a replayable routine">Rec Motion</button>
           <button id="sweepBtn" class="sm outline-red" onclick="toggleSweep()">Sweep Loop</button>
         </div>
       </div>
 
+      <!-- 3D CARTESIAN INVERSE KINEMATICS SOLVER -->
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title">Cartesian XYZ Inverse Kinematics</div>
+          <div class="row">
+            <span id="ikStatusBadge" class="mono muted" style="font-size:10px;">IK: VALID</span>
+            <button id="ikElbowBtn" class="sm active-state" onclick="toggleElbowConfig()">Elbow: UP</button>
+            <button class="sm" onclick="syncIKFromCurrentFK()" title="Sync XYZ sliders from current joint angles">Sync FK</button>
+          </div>
+        </div>
+
+        <div class="ik-grid">
+          <div class="ik-row">
+            <div class="ik-lbl"><span>X</span> FWD</div>
+            <button class="sm" onclick="nudgeIK('x', -10)">-10</button>
+            <input type="range" id="ikX" min="20" max="295" value="163" oninput="solveAndApplyIK()" />
+            <button class="sm" onclick="nudgeIK('x', 10)">+10</button>
+            <div class="readout" id="ikXVal">163 mm</div>
+          </div>
+          <div class="ik-row">
+            <div class="ik-lbl"><span>Y</span> SIDE</div>
+            <button class="sm" onclick="nudgeIK('y', -10)">-10</button>
+            <input type="range" id="ikY" min="-260" max="260" value="0" oninput="solveAndApplyIK()" />
+            <button class="sm" onclick="nudgeIK('y', 10)">+10</button>
+            <div class="readout" id="ikYVal">0 mm</div>
+          </div>
+          <div class="ik-row">
+            <div class="ik-lbl"><span>Z</span> HGT</div>
+            <button class="sm" onclick="nudgeIK('z', -10)">-10</button>
+            <input type="range" id="ikZ" min="15" max="385" value="212" oninput="solveAndApplyIK()" />
+            <button class="sm" onclick="nudgeIK('z', 10)">+10</button>
+            <div class="readout" id="ikZVal">212 mm</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- JOINT POSITIONING -->
       <div class="panel">
         <div class="panel-head">
           <div class="panel-title">Joint Positioning</div>
@@ -552,15 +698,15 @@
 
         <div class="row">
           <button class="primary" style="flex:1;" onclick="sendAllEnabledJoints()">Move Enabled Axes</button>
-          <button onclick="toggleGripperQuick()">Toggle Gripper</button>
+          <button onclick="toggleGripperQuick()">Toggle Gripper [Space]</button>
         </div>
 
         <details>
-          <summary>System, Driver &amp; Gear Configuration</summary>
+          <summary>System, TMC2209 Driver &amp; Gear Configuration</summary>
           <div class="drawer-body">
             <div class="row">
-              <button class="sm" onclick="sendCmd('M569 S1 X Y Z A')">StealthChop [Req. for StallGuard]</button>
-              <button class="sm" onclick="sendCmd('M569 S0 X Y Z A')">SpreadCycle [Max Torque]</button>
+              <button class="sm" onclick="sendCmd('M569 S1 X Y Z A')">StealthChop [StallGuard]</button>
+              <button class="sm" onclick="sendCmd('M569 S0 X Y Z A')">SpreadCycle [Torque]</button>
               <button class="sm" onclick="setDriveSteps('bench')">1:1 Bench Steps</button>
               <button class="sm" onclick="setDriveSteps('geared')">4:1 Geared Steps</button>
             </div>
@@ -583,11 +729,11 @@
       </div>
     </div>
 
-    <!-- RIGHT COLUMN: LIVE VS PROJECTED TELEMETRY, ROUTINES & TERMINAL -->
+    <!-- RIGHT COLUMN: 3D TWIN / 6-MODE TELEMETRY, COBOT GUARD, TEACH SEQUENCER & TERMINAL -->
     <div class="col">
       <div class="panel">
         <div class="panel-head">
-          <div class="panel-title">Live Measured vs. Projected</div>
+          <div class="panel-title">3D Digital Twin &amp; Real-Time Telemetry</div>
           <div class="row">
             <button id="hwSensorBtn" class="sm" onclick="toggleHwSensor()" title="Toggle live TMC2209 UART StallGuard polling">HW Sensor: OFF</button>
             <button class="sm" onclick="calibrateBaseline()" title="Re-baseline unloaded free-spin StallGuard reading">Calibrate</button>
@@ -598,20 +744,23 @@
         </div>
 
         <div class="graph-tabs" id="graphTabs">
-          <div class="tab active" onclick="setGraphMode('resistance', this)">01 Resistance</div>
-          <div class="tab" onclick="setGraphMode('trajectory', this)">02 Position</div>
-          <div class="tab" onclick="setGraphMode('velocity', this)">03 Velocity</div>
-          <div class="tab" onclick="setGraphMode('workspace', this)">04 2D Ghost</div>
+          <div class="tab active" onclick="setGraphMode('twin3d', this)">01 3D Twin</div>
+          <div class="tab" onclick="setGraphMode('workspace', this)">02 2D IK Click</div>
+          <div class="tab" onclick="setGraphMode('resistance', this)">03 Resistance</div>
+          <div class="tab" onclick="setGraphMode('trajectory', this)">04 Position</div>
+          <div class="tab" onclick="setGraphMode('velocity', this)">05 Velocity</div>
+          <div class="tab" onclick="setGraphMode('multiaxis', this)">06 All Axes</div>
         </div>
 
-        <div class="canvas-wrap">
+        <div class="canvas-wrap" id="canvasWrap">
           <canvas id="telemetryCanvas"></canvas>
+          <div class="canvas-overlay-hint" id="canvasHint">DRAG TO ORBIT 3D CAMERA // DASHED = PROJECTED, SOLID = MEASURED</div>
         </div>
 
         <div class="telemetry-metrics">
           <div class="metric-cell">
             <span class="metric-lbl">AXIS / STALLGUARD</span>
-            <span id="mSgRaw" class="metric-val">J1 [X] // SG: --</span>
+            <span id="mSgRaw" class="metric-val">X // SG: SIM</span>
           </div>
           <div class="metric-cell">
             <span class="metric-lbl">MEASURED vs PROJ LOAD</span>
@@ -619,7 +768,7 @@
           </div>
           <div class="metric-cell">
             <span class="metric-lbl">RESISTANCE DELTA</span>
-            <span id="mDelta" class="metric-val accent-txt">+0.0% NOMINAL</span>
+            <span id="mDelta" class="metric-val accent-txt">+0% NOMINAL</span>
           </div>
           <div class="metric-cell">
             <span class="metric-lbl">POS TRACKING LAG</span>
@@ -627,18 +776,29 @@
           </div>
         </div>
 
+        <!-- COBOT COLLISION / RESISTANCE AUTO-STOP GUARD -->
+        <div class="guard-bar" id="guardBar">
+          <button id="guardToggleBtn" class="sm" onclick="toggleSafetyGuard()" title="Automatically stop motors (M410) if shaft resistance exceeds trip threshold">Cobot Guard: OFF</button>
+          <span class="muted" style="font-size:10px;">TRIP LIMIT</span>
+          <input id="guardLimitSlider" type="range" min="15" max="80" value="38" style="max-width:110px;"
+            oninput="document.getElementById('guardLimitVal').textContent = '+' + this.value + '%'" />
+          <span id="guardLimitVal" class="mono" style="font-size:11px; width:38px;">+38%</span>
+          <span class="spacer"></span>
+          <span id="guardStateTxt" class="mono muted" style="font-size:10px;">STANDBY</span>
+        </div>
+
         <div id="simDragRow" class="row" style="padding-top:2px;">
-          <span class="muted">TEST DRAG SIMULATOR (OFFLINE PREVIEW):</span>
+          <span class="muted">OFFLINE RESISTANCE SIMULATOR:</span>
           <input id="simDragSlider" type="range" min="0" max="85" value="0"
             oninput="document.getElementById('simDragVal').textContent = '+' + this.value + '%'" />
           <span id="simDragVal" class="mono muted" style="width:36px; text-align:right;">+0%</span>
         </div>
       </div>
 
-      <!-- ROUTINES -->
+      <!-- TEACH PENDANT & ROUTINE DATABASE -->
       <div class="panel">
         <div class="panel-head">
-          <div class="panel-title">Routine Database</div>
+          <div class="panel-title">Teach Pendant &amp; Routine Sequencer</div>
           <div class="row">
             <button class="sm" onclick="exportDB()">Export</button>
             <button class="sm" onclick="document.getElementById('importFile').click()">Import</button>
@@ -646,16 +806,29 @@
           </div>
         </div>
 
+        <!-- VISUAL KEYFRAME STRIP -->
+        <div class="row" style="justify-content:space-between;">
+          <span class="muted" style="font-size:10px; letter-spacing:0.05em;">TEACH WAYPOINTS (CLICK CHIP TO PREVIEW POSE):</span>
+          <div class="row" style="gap:4px;">
+            <button class="sm" onclick="captureTeachWaypoint()">+ Capture [T]</button>
+            <button class="sm primary" onclick="playTeachWaypoints(false)">Play Strip</button>
+            <button class="sm" onclick="playTeachWaypoints(true)">Loop</button>
+            <button class="sm" onclick="promoteStripToEditor()">To G-Code</button>
+            <button class="sm" onclick="clearTeachWaypoints()">Clear</button>
+          </div>
+        </div>
+        <div id="waypointStrip" class="waypoint-strip"></div>
+
         <div class="row">
           <input id="appName" type="text" style="flex:1;" placeholder="Routine Name" />
-          <button class="sm" onclick="recordKeyframe()">+ Pose</button>
+          <button class="sm" onclick="recordKeyframe()">+ G1 Line</button>
           <button class="sm" onclick="addPauseStep()">+ 0.5s</button>
-          <button class="sm primary" onclick="saveApp()">Save</button>
+          <button class="sm primary" onclick="saveApp()">Save Routine</button>
         </div>
-        <textarea id="appSteps" rows="2" placeholder="G-code sequence (leave blank to save current pose)"></textarea>
+        <textarea id="appSteps" rows="2" placeholder="G-code sequence (leave blank to save Teach Strip or current pose)"></textarea>
 
         <div id="routineStatusRow" class="row" style="display:none;">
-          <span class="mono" style="color:var(--red); font-size:11px;">EXECUTING SEQUENCE...</span>
+          <span id="routineStatusTxt" class="mono" style="color:var(--red); font-size:11px;">EXECUTING SEQUENCE...</span>
           <span class="spacer"></span>
           <button class="sm accent" onclick="abortRoutine()">Abort</button>
         </div>
@@ -667,13 +840,16 @@
       <div class="panel">
         <div class="panel-head">
           <div class="panel-title">Serial Terminal</div>
-          <button class="sm" onclick="document.getElementById('console').innerHTML=''">Clear</button>
+          <div class="row">
+            <button class="sm" onclick="sendCmd('M114')">Pos [M114]</button>
+            <button class="sm" onclick="document.getElementById('console').innerHTML=''">Clear</button>
+          </div>
         </div>
 
         <div id="console" class="terminal"></div>
 
         <div class="row">
-          <input id="gcodeInput" type="text" style="flex:1;" placeholder="Enter G-code (e.g. G1 X360 F3000)..." />
+          <input id="gcodeInput" type="text" style="flex:1;" placeholder="Enter G-code (e.g. G1 X45 Y20 F3600)..." />
           <button class="primary" onclick="sendManualGcode()">Send</button>
         </div>
       </div>
@@ -681,17 +857,21 @@
   </div>
 
   <script>
+    // Exact CAD link geometry (mm): Base->Shoulder Z=105mm, Upper Arm L1=135mm (home 18 deg), Forearm+Gripper L2=174mm (home 10 deg pitch)
+    const ARM_GEOM = { z0: 105, L1: 135, L2: 174, j2HomeDeg: 18, j3HomeWorldDeg: 100 };
+
     const JOINTS = [
       { id: 'X', name: 'J1 Base [XM]',     min: -180, max: 180, val: 0,  enabled: true,  invert: false },
-      { id: 'Y', name: 'J2 Shoulder [YM]', min: -90,  max: 135, val: 0,  enabled: true,  invert: false },
-      { id: 'Z', name: 'J3 Elbow [ZAM]',   min: -135, max: 135, val: 0,  enabled: false, invert: false },
-      { id: 'A', name: 'J4 Wrist [EM]',    min: -180, max: 180, val: 0,  enabled: false, invert: false },
+      { id: 'Y', name: 'J2 Shoulder [YM]', min: -75,  max: 95,  val: 0,  enabled: true,  invert: false },
+      { id: 'Z', name: 'J3 Elbow [ZAM]',   min: -100, max: 100, val: 0,  enabled: true,  invert: false },
+      { id: 'A', name: 'J4 Wrist [EM]',    min: -180, max: 180, val: 0,  enabled: true,  invert: false },
       { id: 'G', name: 'Gripper [SERVO]',  min: 10,   max: 170, val: 90, enabled: true,  invert: false }
     ];
 
     const DEFAULT_APPS = [
-      { id: 'home-0', name: 'Home Origin (0 deg)', gcode: 'G90\nG1 X0 Y0 F3000\nM280 P0 S90\nM400' },
-      { id: 'sync-xy', name: 'Dual-Axis Test [X+Y]', gcode: 'G90\nG92 X0 Y0\nG1 X180 Y90 F3300\nM400\nG1 X0 Y0 F3300\nM400' }
+      { id: 'home-0', name: 'Home Origin (0 deg)', gcode: 'G90\nG1 X0 Y0 Z0 A0 F3600\nM280 P0 S90\nM400' },
+      { id: 'pick-place', name: 'Pick & Place DemoCycle', gcode: 'G90\nG1 X45 Y42 Z18 A0 F4200\nM280 P0 S135\nM400\nG4 P300\nM280 P0 S40\nG4 P350\nG1 X45 Y5 Z-15 A0 F4200\nG1 X-45 Y5 Z-15 A90 F4200\nG1 X-45 Y42 Z18 A90 F3600\nM400\nM280 P0 S135\nG4 P300\nG1 X0 Y0 Z0 A0 F4200\nM280 P0 S90\nM400' },
+      { id: 'sync-xy', name: 'Multi-Axis Helix Sweep', gcode: 'G90\nG1 X60 Y35 Z-25 A90 F4500\nM400\nG1 X-60 Y-20 Z35 A-90 F4500\nM400\nG1 X0 Y0 Z0 A0 F4500\nM400' }
     ];
 
     let port = null, writer = null, reader = null;
@@ -701,50 +881,69 @@
     let stepSize = 15;
     let liveFollow = true;
     let keyboardMode = true;
-    let holdSpinDir = 0; // -1, 0, +1 for Hold CCW / Hold CW buttons
+    let holdSpinDir = 0;
     let sweepRunning = false;
     let routineAbort = false;
     let hwSensorEnabled = false;
+    let elbowUp = true;
 
-    // Authoritative absolute hardware target coordinates (100% pure G90 — never switches to G91!)
+    // Cobot safety tripwire state
+    let safetyGuardEnabled = false;
+    let safetyTripped = false;
+
+    // Live motion recording state
+    let isRecordingMotion = false;
+    let recordedFrames = [];
+    let lastRecSnap = '';
+
+    // Teach-Pendant Waypoints
+    let teachWaypoints = JSON.parse(localStorage.getItem('ender_arm_waypoints') || 'null') || [
+      { X: 0, Y: 0, Z: 0, A: 0, G: 130 },
+      { X: 38, Y: 36, Z: 16, A: 0, G: 40 },
+      { X: -38, Y: 20, Z: -10, A: 60, G: 130 }
+    ];
+    let activeWpIdx = -1;
+
+    // Authoritative hardware target coordinates (100% pure G90)
     const cmdPos = { X: 0, Y: 0, Z: 0, A: 0 };
 
-    // Strict serialized 1-line-at-a-time serial queue + coalesced latest motion slot
+    // Strict 1-line-at-a-time serial queue + coalesced latest motion slot
     const cmdQueue = [];
-    let pendingMotion = null; // Overwritten in-place so rapid clicks/drags never build a queue!
+    let pendingMotion = null;
     let serialBusy = false;
     let currentOkResolver = null;
 
-    // Simultaneous multi-key & 2D XY pad state
+    // Simultaneous multi-key, 2D XY pad & Gamepad state
     const heldKeys = new Set();
     let padVec = { x: 0, y: 0, active: false };
+    let gpVec  = { x: 0, y: 0, z: 0, a: 0, active: false };
+    let gpPrevButtons = [];
     let nextJogStepAt = 0;
 
-    // --- REAL-TIME HARDWARE vs PROJECTED MODEL STATE ---
-    let graphMode = 'resistance'; // 'resistance' | 'trajectory' | 'velocity' | 'workspace'
+    // Telemetry & 3D Twin Camera state
+    let graphMode = 'twin3d'; // 'twin3d' | 'workspace' | 'resistance' | 'trajectory' | 'velocity' | 'multiaxis'
     let graphPaused = false;
     let hasHardwareStream = false;
     let lastTelemRxMs = 0;
+    let camYaw = -0.62, camPitch = 0.44;
+    let isDraggingCanvas = false, dragLastX = 0, dragLastY = 0;
 
-    // Projected (ideal kinematic model)
     const projTarget = { X: 0, Y: 0, Z: 0, A: 0 };
     const projPos    = { X: 0, Y: 0, Z: 0, A: 0 };
     const projVel    = { X: 0, Y: 0, Z: 0, A: 0 };
 
-    // Measured (real-time from @TELEM hardware ISR + TMC2209 StallGuard4 & PWM_SCALE)
     const measPos    = { X: 0, Y: 0, Z: 0, A: 0 };
-    const prevMeasPos= { X: 0, Y: 0, Z: 0, A: 0 };
     const measVel    = { X: 0, Y: 0, Z: 0, A: 0 };
     const hwSG       = { X: 0, Y: 0, Z: 0, A: 0 };
     const hwPWM      = { X: 0, Y: 0, Z: 0, A: 0 };
-    // Rolling peak unloaded SG baseline per motor (auto-learns free-spin back-EMF!)
     const sgBaseline = { X: 180, Y: 180, Z: 180, A: 180 };
     const pwmBaseline= { X: 35,  Y: 35,  Z: 35,  A: 35  };
 
-    const MAX_SAMPLES = 220; // ~11 seconds at 20 Hz
+    const MAX_SAMPLES = 220;
     let telemetry = [];
+    let tcpTrail = []; // 3D ribbon trail of measured TCP positions
 
-    let apps = JSON.parse(localStorage.getItem('ender_arm_apps_v2') || localStorage.getItem('ender_arm_apps') || 'null') || DEFAULT_APPS;
+    let apps = JSON.parse(localStorage.getItem('ender_arm_apps_v3') || localStorage.getItem('ender_arm_apps_v2') || 'null') || DEFAULT_APPS;
 
     const savedCfg = JSON.parse(localStorage.getItem('ender_arm_joint_cfg') || 'null');
     if (savedCfg) {
@@ -772,6 +971,307 @@
       el.scrollTop = el.scrollHeight;
     }
 
+    // =========================================================================
+    // 3D FORWARD & INVERSE KINEMATICS ENGINE (MATCHED TO FUSION 360 CAD)
+    // =========================================================================
+    function fk3D(j1Deg, j2Deg, j3Deg) {
+      const yaw = (j1Deg * Math.PI) / 180;
+      const th1 = ((ARM_GEOM.j2HomeDeg + j2Deg) * Math.PI) / 180; // Angle from vertical +Z
+      const th2 = ((ARM_GEOM.j3HomeWorldDeg + j2Deg + j3Deg) * Math.PI) / 180;
+
+      const elbR = ARM_GEOM.L1 * Math.sin(th1);
+      const elbZ = ARM_GEOM.z0 + ARM_GEOM.L1 * Math.cos(th1);
+      const tipR = elbR + ARM_GEOM.L2 * Math.sin(th2);
+      const tipZ = elbZ + ARM_GEOM.L2 * Math.cos(th2);
+
+      const cy = Math.cos(yaw), sy = Math.sin(yaw);
+      return {
+        sh:  { x: 0, y: 0, z: ARM_GEOM.z0 },
+        elb: { x: elbR * cy, y: elbR * sy, z: elbZ, r: elbR },
+        tip: { x: tipR * cy, y: tipR * sy, z: tipZ, r: tipR }
+      };
+    }
+
+    function solveIK3D(tx, ty, tz, preferElbowUp = true) {
+      const j1Deg = (Math.atan2(ty, tx) * 180) / Math.PI;
+      const r = Math.hypot(tx, ty);
+      const dz = tz - ARM_GEOM.z0;
+      const distSq = r * r + dz * dz;
+      const dist = Math.sqrt(distSq);
+      const L1 = ARM_GEOM.L1, L2 = ARM_GEOM.L2;
+      const maxReach = L1 + L2 - 2;
+      const minReach = Math.abs(L1 - L2) + 8;
+
+      let clamped = false;
+      let rc = r, dzc = dz;
+      if (dist > maxReach) {
+        const s = maxReach / dist;
+        rc *= s; dzc *= s; clamped = true;
+      } else if (dist < minReach && dist > 1e-3) {
+        const s = minReach / dist;
+        rc *= s; dzc *= s; clamped = true;
+      }
+
+      const d2 = rc * rc + dzc * dzc;
+      const cosKnee = Math.max(-1, Math.min(1, (d2 - L1 * L1 - L2 * L2) / (2 * L1 * L2)));
+      const kneeRad = (preferElbowUp ? 1 : -1) * Math.acos(cosKnee);
+
+      // Angle of target vector from +Z vertical: atan2(rc, dzc)
+      const baseAlpha = Math.atan2(rc, dzc);
+      const beta = Math.atan2(L2 * Math.sin(kneeRad), L1 + L2 * Math.cos(kneeRad));
+      const th1 = baseAlpha - beta;
+      const th2 = th1 + kneeRad;
+
+      const j2Deg = (th1 * 180) / Math.PI - ARM_GEOM.j2HomeDeg;
+      const j3Deg = (th2 * 180) / Math.PI - ARM_GEOM.j3HomeWorldDeg - j2Deg;
+
+      return {
+        valid: !clamped,
+        X: Math.max(-180, Math.min(180, j1Deg)),
+        Y: Math.max(-75, Math.min(95, j2Deg)),
+        Z: Math.max(-100, Math.min(100, j3Deg))
+      };
+    }
+
+    function updateHUDFromFK() {
+      const fk = fk3D(projPos.X, projPos.Y, projPos.Z);
+      document.getElementById('hudTcpX').textContent = `${fk.tip.x.toFixed(1)} mm`;
+      document.getElementById('hudTcpY').textContent = `${fk.tip.y.toFixed(1)} mm`;
+      document.getElementById('hudTcpZ').textContent = `${fk.tip.z.toFixed(1)} mm`;
+      document.getElementById('hudReach').textContent = `${fk.tip.r.toFixed(1)} mm`;
+    }
+
+    function syncIKFromCurrentFK() {
+      const fk = fk3D(cmdPos.X, cmdPos.Y, cmdPos.Z);
+      const rx = Math.round(fk.tip.x), ry = Math.round(fk.tip.y), rz = Math.round(fk.tip.z);
+      document.getElementById('ikX').value = rx;
+      document.getElementById('ikY').value = ry;
+      document.getElementById('ikZ').value = rz;
+      document.getElementById('ikXVal').textContent = `${rx} mm`;
+      document.getElementById('ikYVal').textContent = `${ry} mm`;
+      document.getElementById('ikZVal').textContent = `${rz} mm`;
+    }
+
+    function toggleElbowConfig() {
+      elbowUp = !elbowUp;
+      const btn = document.getElementById('ikElbowBtn');
+      btn.textContent = `Elbow: ${elbowUp ? 'UP' : 'DOWN'}`;
+      btn.classList.toggle('active-state', elbowUp);
+      solveAndApplyIK();
+    }
+
+    function nudgeIK(axis, deltaMm) {
+      const el = document.getElementById(axis === 'x' ? 'ikX' : axis === 'y' ? 'ikY' : 'ikZ');
+      el.value = Math.max(Number(el.min), Math.min(Number(el.max), Number(el.value) + deltaMm));
+      solveAndApplyIK();
+    }
+
+    function solveAndApplyIK() {
+      const tx = Number(document.getElementById('ikX').value);
+      const ty = Number(document.getElementById('ikY').value);
+      const tz = Number(document.getElementById('ikZ').value);
+      document.getElementById('ikXVal').textContent = `${tx} mm`;
+      document.getElementById('ikYVal').textContent = `${ty} mm`;
+      document.getElementById('ikZVal').textContent = `${tz} mm`;
+
+      const sol = solveIK3D(tx, ty, tz, elbowUp);
+      const badge = document.getElementById('ikStatusBadge');
+      badge.textContent = sol.valid ? 'IK: VALID' : 'IK: CLAMPED TO ENVELOPE';
+      badge.style.color = sol.valid ? '#808080' : '#e52521';
+
+      const move = {};
+      ['X', 'Y', 'Z'].forEach(ax => {
+        const j = JOINTS.find(it => it.id === ax);
+        if (!j.enabled) toggleAxisEnabled(ax, true);
+        j.val = Math.round(sol[ax]);
+        move[ax] = hwAngle(j, sol[ax]);
+      });
+      if (liveFollow) scheduleMotion(move, getFeedrate());
+      else {
+        ['X', 'Y', 'Z'].forEach(ax => { projTarget[ax] = move[ax]; cmdPos[ax] = move[ax]; });
+      }
+      syncSlidersFromCmdPos();
+    }
+
+    function applyPosePreset(xDeg, yDeg, zDeg, aDeg, gDeg) {
+      const vals = { X: xDeg, Y: yDeg, Z: zDeg, A: aDeg, G: gDeg };
+      const move = {};
+      JOINTS.forEach(j => {
+        if (vals[j.id] !== undefined) {
+          j.val = vals[j.id];
+          if (j.id !== 'G') {
+            if (!j.enabled) j.enabled = true;
+            move[j.id] = hwAngle(j, j.val);
+          }
+        }
+      });
+      renderJoints();
+      scheduleMotion(move, getFeedrate());
+      if (writer && gDeg !== undefined) enqueueCmd(`M280 P0 S${gDeg}`);
+      syncIKFromCurrentFK();
+    }
+
+    // =========================================================================
+    // COBOT SAFETY GUARD & LIVE MOTION RECORDER
+    // =========================================================================
+    function toggleSafetyGuard() {
+      safetyGuardEnabled = !safetyGuardEnabled;
+      safetyTripped = false;
+      const btn = document.getElementById('guardToggleBtn');
+      const bar = document.getElementById('guardBar');
+      const txt = document.getElementById('guardStateTxt');
+      btn.textContent = `Cobot Guard: ${safetyGuardEnabled ? 'ARMED' : 'OFF'}`;
+      btn.classList.toggle('active-state', safetyGuardEnabled);
+      bar.classList.remove('tripped');
+      txt.textContent = safetyGuardEnabled ? 'MONITORING TORQUE' : 'STANDBY';
+      txt.style.color = safetyGuardEnabled ? '#f5f5f5' : '#808080';
+    }
+
+    function triggerSafetyTrip(axis, excessPct) {
+      if (safetyTripped) return;
+      safetyTripped = true;
+      quickStop();
+      const bar = document.getElementById('guardBar');
+      const txt = document.getElementById('guardStateTxt');
+      bar.classList.add('tripped');
+      txt.textContent = `TRIPPED [${axis} +${Math.round(excessPct)}%]`;
+      txt.style.color = '#e52521';
+      log(`COBOT SAFETY GUARD TRIPPED ON ${axis} (+${excessPct.toFixed(0)}% RESISTANCE) — MOTION HALTED!`);
+    }
+
+    function toggleLiveRecording() {
+      const btn = document.getElementById('recLiveBtn');
+      if (!isRecordingMotion) {
+        isRecordingMotion = true;
+        recordedFrames = [];
+        lastRecSnap = '';
+        btn.textContent = 'Stop Rec';
+        btn.classList.add('accent');
+        log('LIVE MOTION RECORDING STARTED — Jog arm with Keys, XY Pad, Sliders, or Gamepad...');
+      } else {
+        isRecordingMotion = false;
+        btn.textContent = 'Rec Motion';
+        btn.classList.remove('accent');
+        if (recordedFrames.length > 0) {
+          const gcode = ['G90', ...recordedFrames, 'M400'].join('\n');
+          const name = `Recorded Motion (${recordedFrames.length} steps)`;
+          apps.unshift({ id: 'rec-' + Date.now(), name, gcode });
+          persistApps();
+          log(`SAVED RECORDED MOTION: ${recordedFrames.length} trajectory steps`);
+        } else {
+          log('RECORDING STOPPED (no movement captured).');
+        }
+      }
+    }
+
+    // =========================================================================
+    // TEACH-PENDANT VISUAL WAYPOINT STRIP
+    // =========================================================================
+    function persistWaypoints() {
+      localStorage.setItem('ender_arm_waypoints', JSON.stringify(teachWaypoints));
+      renderWaypoints();
+    }
+
+    function captureTeachWaypoint() {
+      const g = JOINTS.find(j => j.id === 'G');
+      teachWaypoints.push({
+        X: Math.round(cmdPos.X),
+        Y: Math.round(cmdPos.Y),
+        Z: Math.round(cmdPos.Z),
+        A: Math.round(cmdPos.A),
+        G: g ? g.val : 90
+      });
+      persistWaypoints();
+      log(`CAPTURED WAYPOINT #${teachWaypoints.length}: X${Math.round(cmdPos.X)} Y${Math.round(cmdPos.Y)} Z${Math.round(cmdPos.Z)} A${Math.round(cmdPos.A)}`);
+    }
+
+    function jumpToWaypoint(idx) {
+      const wp = teachWaypoints[idx];
+      if (!wp) return;
+      activeWpIdx = idx;
+      renderWaypoints();
+      applyPosePreset(wp.X, wp.Y, wp.Z, wp.A, wp.G);
+    }
+
+    function removeWaypoint(idx, evt) {
+      if (evt) evt.stopPropagation();
+      teachWaypoints.splice(idx, 1);
+      if (activeWpIdx >= teachWaypoints.length) activeWpIdx = -1;
+      persistWaypoints();
+    }
+
+    function clearTeachWaypoints() {
+      teachWaypoints = [];
+      activeWpIdx = -1;
+      persistWaypoints();
+    }
+
+    function promoteStripToEditor() {
+      if (!teachWaypoints.length) return;
+      const lines = ['G90'];
+      const feed = getFeedrate();
+      teachWaypoints.forEach(wp => {
+        lines.push(`G1 X${wp.X} Y${wp.Y} Z${wp.Z} A${wp.A} F${feed}`);
+        lines.push(`M280 P0 S${wp.G}`);
+        lines.push('M400');
+      });
+      document.getElementById('appSteps').value = lines.join('\n');
+      if (!document.getElementById('appName').value) {
+        document.getElementById('appName').value = `Teach Sequence (${teachWaypoints.length} pts)`;
+      }
+    }
+
+    async function playTeachWaypoints(loop = false) {
+      if (!teachWaypoints.length) { alert('Capture at least one Teach Waypoint first.'); return; }
+      routineAbort = false;
+      document.getElementById('routineStatusRow').style.display = 'flex';
+      do {
+        for (let i = 0; i < teachWaypoints.length; i++) {
+          if (routineAbort) break;
+          activeWpIdx = i;
+          renderWaypoints();
+          const wp = teachWaypoints[i];
+          document.getElementById('routineStatusTxt').textContent = `WAYPOINT ${i + 1}/${teachWaypoints.length}...`;
+          const gcode = `G1 X${wp.X} Y${wp.Y} Z${wp.Z} A${wp.A} F${getFeedrate()}`;
+          cmdPos.X = wp.X; cmdPos.Y = wp.Y; cmdPos.Z = wp.Z; cmdPos.A = wp.A;
+          syncSlidersFromCmdPos();
+          if (writer) {
+            await sendAndWait(gcode);
+            await sendAndWait(`M280 P0 S${wp.G}`);
+            await sendAndWait('M400');
+          } else {
+            interceptProjectedGcode(gcode);
+            await new Promise(r => setTimeout(r, 650));
+          }
+        }
+      } while (loop && !routineAbort);
+      activeWpIdx = -1;
+      renderWaypoints();
+      document.getElementById('routineStatusRow').style.display = 'none';
+    }
+
+    function renderWaypoints() {
+      const strip = document.getElementById('waypointStrip');
+      strip.innerHTML = '';
+      if (!teachWaypoints.length) {
+        strip.innerHTML = '<span class="muted" style="font-size:10px;">No waypoints — pose the arm and press [T] or + Capture.</span>';
+        return;
+      }
+      teachWaypoints.forEach((wp, i) => {
+        const chip = document.createElement('div');
+        chip.className = 'wp-chip' + (i === activeWpIdx ? ' active-wp' : '');
+        chip.onclick = () => jumpToWaypoint(i);
+        chip.innerHTML = `
+          <span>#${i + 1} [${wp.X},${wp.Y},${wp.Z}] G:${wp.G}</span>
+          <span class="wp-del" onclick="removeWaypoint(${i}, event)">&times;</span>
+        `;
+        strip.appendChild(chip);
+      });
+    }
+
+    // =========================================================================
+    // MOTOR SELECTION, SERIAL ENGINE & JOGGING
+    // =========================================================================
     function toggleMultiSelectMode() {
       multiSelectMode = !multiSelectMode;
       const btn = document.getElementById('multiSelBtn');
@@ -851,10 +1351,11 @@
         else sgBaseline[ax] = 160;
         if (hwPWM[ax] > 5) pwmBaseline[ax] = hwPWM[ax];
       });
+      safetyTripped = false;
+      document.getElementById('guardBar').classList.remove('tripped');
       log('LOAD BASELINE RE-CALIBRATED FOR FREE SPIN');
     }
 
-    // Parse outbound G-code to drive the PROJECTED kinematic model
     let simRelative = false;
     function interceptProjectedGcode(cmd) {
       const up = cmd.toUpperCase().trim();
@@ -872,7 +1373,15 @@
         return;
       }
       if (up.startsWith('M410')) {
-        ['X', 'Y', 'Z', 'A'].forEach(ax => { projTarget[ax] = projPos[ax]; });
+        ['X', 'Y', 'Z', 'A'].forEach(ax => { projTarget[ax] = projPos[ax]; cmdPos[ax] = projPos[ax]; });
+        return;
+      }
+      if (up.startsWith('M280')) {
+        const ms = up.match(/S(\d+)/);
+        if (ms) {
+          const g = JOINTS.find(j => j.id === 'G');
+          if (g) { g.val = Number(ms[1]); renderJoints(); }
+        }
         return;
       }
       if (up.startsWith('G0') || up.startsWith('G1')) {
@@ -881,14 +1390,14 @@
           if (m) {
             const v = Number(m[1]);
             projTarget[ax] = simRelative ? (projTarget[ax] + v) : v;
+            cmdPos[ax] = projTarget[ax];
           }
         });
+        syncSlidersFromCmdPos();
       }
     }
 
-    // Parse inbound @TELEM packet from Marlin SKR Mini E3 V3.0
     function parseHardwareTelem(line) {
-      // Format: @TELEM X:12.34 Y:0.00 Z:0.00 A:0.00 SGX:310 SGY:0 SGZ:0 SGA:0 PWX:42 PWY:30
       const now = performance.now();
       const dt = lastTelemRxMs > 0 ? Math.max(0.04, (now - lastTelemRxMs) / 1000) : 0.15;
       lastTelemRxMs = now;
@@ -912,7 +1421,6 @@
         if (ms) {
           const sg = Number(ms[1]);
           hwSG[ax] = sg;
-          // Gently adapt unloaded ceiling upward if motor spins freer at current speed
           if (measVel[ax] > 8 && sg > sgBaseline[ax]) {
             sgBaseline[ax] = sgBaseline[ax] * 0.85 + sg * 0.15;
           }
@@ -922,9 +1430,6 @@
       });
     }
 
-    // =========================================================================
-    // ROCK-SOLID SERIAL DISPATCHER (Strict 1-Line ok Handshake + Move Coalescing)
-    // =========================================================================
     function enqueueCmd(line, silent = false) {
       const clean = line.split(';')[0].trim();
       if (!clean) return Promise.resolve();
@@ -940,6 +1445,12 @@
     }
 
     function scheduleMotion(axesObj, feedrate) {
+      if (safetyTripped) {
+        safetyTripped = false;
+        document.getElementById('guardBar').classList.remove('tripped');
+        document.getElementById('guardStateTxt').textContent = 'MONITORING TORQUE';
+        document.getElementById('guardStateTxt').style.color = '#f5f5f5';
+      }
       const parts = [];
       ['X', 'Y', 'Z', 'A'].forEach(ax => {
         if (axesObj[ax] !== undefined) {
@@ -951,8 +1462,13 @@
       });
       if (!parts.length) return;
       const gcode = `G1 ${parts.join(' ')} F${Math.max(60, Math.round(feedrate))}`;
+
+      if (isRecordingMotion && gcode !== lastRecSnap) {
+        recordedFrames.push(gcode);
+        lastRecSnap = gcode;
+      }
+
       if (!writer) return;
-      // Coalesce! Overwrite pendingMotion so rapid clicks/sliders NEVER stack up lag!
       pendingMotion = gcode;
       pumpSerial();
     }
@@ -963,7 +1479,6 @@
       try {
         while (writer && (cmdQueue.length > 0 || pendingMotion !== null)) {
           let item;
-          // Prioritize control commands, otherwise send the single latest coalesced motion!
           if (cmdQueue.length > 0) {
             item = cmdQueue.shift();
           } else {
@@ -1008,7 +1523,6 @@
     }
 
     function sendAndWait(cmd, timeoutMs = 15000) {
-      // Used by M400 in routines/sweeps where waiting for physical move completion can take >2s
       const clean = cmd.split(';')[0].trim();
       if (!clean) return Promise.resolve();
       interceptProjectedGcode(clean);
@@ -1048,7 +1562,6 @@
       });
     }
 
-    // --- JOG, HOLD, SWEEP, STOP & RESET (100% Pure G90 Absolute — Zero Runaways!) ---
     function quickSpin(deg, axisOverride = null) {
       const axes = axisOverride ? [axisOverride] : Array.from(selectedMotors);
       const move = {};
@@ -1105,6 +1618,8 @@
       clearAllHeldKeys();
       pendingMotion = null;
       cmdQueue.splice(0).forEach(it => it.resolve && it.resolve());
+      ['X', 'Y', 'Z', 'A'].forEach(ax => { projTarget[ax] = projPos[ax]; cmdPos[ax] = projPos[ax]; });
+      syncSlidersFromCmdPos();
       if (writer) {
         await enqueueCmd('M410', false);
         await enqueueCmd('M114', true);
@@ -1115,6 +1630,7 @@
     async function softReset() {
       sweepRunning = false;
       routineAbort = true;
+      safetyTripped = false;
       holdSpinDir = 0;
       clearAllHeldKeys();
       pendingMotion = null;
@@ -1122,9 +1638,12 @@
       document.getElementById('sweepBtn').textContent = 'Sweep Loop';
       document.getElementById('sweepBtn').classList.remove('active');
       document.getElementById('routineStatusRow').style.display = 'none';
+      document.getElementById('guardBar').classList.remove('tripped');
       JOINTS.forEach(j => { j.val = j.id === 'G' ? 90 : 0; });
       ['X', 'Y', 'Z', 'A'].forEach(ax => { cmdPos[ax] = 0; projTarget[ax] = 0; projPos[ax] = 0; measPos[ax] = 0; });
+      tcpTrail = [];
       renderJoints();
+      syncIKFromCurrentFK();
       if (writer) {
         await enqueueCmd('M999', false);
         await enqueueCmd('G90', true);
@@ -1147,7 +1666,9 @@
       }
     }
 
-    // --- MULTI-JOINT CONTROLS ---
+    // =========================================================================
+    // JOINT CARDS & SYSTEM CONFIG
+    // =========================================================================
     function renderJoints() {
       const c = document.getElementById('jointsContainer');
       c.innerHTML = '';
@@ -1183,7 +1704,8 @@
     function toggleAxisEnabled(id, checked) {
       const j = JOINTS.find(x => x.id === id);
       j.enabled = checked;
-      document.getElementById(`card-${id}`).classList.toggle('disabled', !checked);
+      const card = document.getElementById(`card-${id}`);
+      if (card) card.classList.toggle('disabled', !checked);
       saveJointCfg();
     }
 
@@ -1198,6 +1720,7 @@
       j.val = id === 'G' ? 90 : 0;
       if (id !== 'G') { cmdPos[id] = 0; projTarget[id] = 0; projPos[id] = 0; measPos[id] = 0; }
       renderJoints();
+      syncIKFromCurrentFK();
       if (!writer) return;
       if (id === 'G') await enqueueCmd('M280 P0 S90');
       else await enqueueCmd(`G92 ${id}0`);
@@ -1210,9 +1733,11 @@
       if (id !== 'G' && j.enabled) {
         const hw = hwAngle(j, j.val);
         if (liveFollow) scheduleMotion({ [id]: hw }, getFeedrate());
-        else projTarget[id] = hw;
-      } else if (id === 'G' && liveFollow && j.enabled && writer) {
-        enqueueCmd(`M280 P0 S${j.val}`);
+        else { projTarget[id] = hw; cmdPos[id] = hw; }
+        syncIKFromCurrentFK();
+      } else if (id === 'G' && liveFollow && j.enabled) {
+        if (isRecordingMotion) recordedFrames.push(`M280 P0 S${j.val}`);
+        if (writer) enqueueCmd(`M280 P0 S${j.val}`);
       }
     }
 
@@ -1223,9 +1748,11 @@
       document.getElementById(`val-${id}`).textContent = `${j.val}°`;
       if (!j.enabled) toggleAxisEnabled(id, true);
       if (id === 'G') {
+        if (isRecordingMotion) recordedFrames.push(`M280 P0 S${j.val}`);
         if (writer) enqueueCmd(`M280 P0 S${j.val}`);
       } else {
         scheduleMotion({ [id]: hwAngle(j, j.val) }, getFeedrate());
+        syncIKFromCurrentFK();
       }
     }
 
@@ -1233,6 +1760,7 @@
       const g = JOINTS.find(x => x.id === 'G');
       g.val = g.val > 90 ? 35 : 135;
       renderJoints();
+      if (isRecordingMotion) recordedFrames.push(`M280 P0 S${g.val}`);
       if (writer) enqueueCmd(`M280 P0 S${g.val}`);
     }
 
@@ -1240,6 +1768,7 @@
       JOINTS.forEach(j => { j.val = j.id === 'G' ? 90 : 0; });
       renderJoints();
       sendAllEnabledJoints();
+      syncIKFromCurrentFK();
     }
 
     function sendAllEnabledJoints() {
@@ -1255,11 +1784,12 @@
     async function sendZero() {
       ['X', 'Y', 'Z', 'A'].forEach(ax => { cmdPos[ax] = 0; projTarget[ax] = 0; projPos[ax] = 0; measPos[ax] = 0; });
       JOINTS.forEach(j => { if (j.id !== 'G') j.val = 0; });
+      tcpTrail = [];
       renderJoints();
+      syncIKFromCurrentFK();
       if (writer) await enqueueCmd('G92 X0 Y0 Z0 A0');
     }
 
-    // --- SYSTEM CONFIGURATION ---
     async function setDriveSteps(mode) {
       if (mode === 'bench') {
         await enqueueCmd('M92 X8.889 Y8.889 Z8.889 A8.889');
@@ -1285,7 +1815,7 @@
     }
 
     // =========================================================================
-    // WALL-CLOCK PACED MULTI-MOTOR JOG ENGINE (W+D Keys, Hold Buttons, XY Pad)
+    // WALL-CLOCK PACED MULTI-MOTOR JOG + USB GAMEPAD API ENGINE
     // =========================================================================
     const KEY_MAP = {
       arrowleft: 'a', arrowright: 'd', arrowup: 'w', arrowdown: 's',
@@ -1322,6 +1852,7 @@
       const raw = e.key.toLowerCase();
       if (raw === 'escape') { e.preventDefault(); quickStop(); return; }
       if (raw === ' ') { if (!e.repeat) { e.preventDefault(); toggleGripperQuick(); } return; }
+      if (raw === 't') { if (!e.repeat) { e.preventDefault(); captureTeachWaypoint(); } return; }
       const mapped = KEY_MAP[raw];
       if (mapped) {
         e.preventDefault();
@@ -1338,6 +1869,40 @@
     });
 
     window.addEventListener('blur', () => { holdSpinDir = 0; clearAllHeldKeys(); });
+
+    // Web Gamepad API Listeners
+    window.addEventListener('gamepadconnected', e => {
+      const pill = document.getElementById('padPill');
+      pill.classList.add('online');
+      document.getElementById('padText').textContent = 'GAMEPAD: ACTIVE';
+      log('GAMEPAD CONNECTED: ' + e.gamepad.id);
+    });
+    window.addEventListener('gamepaddisconnected', () => {
+      document.getElementById('padPill').classList.remove('online');
+      document.getElementById('padText').textContent = 'GAMEPAD: IDLE';
+      gpVec = { x: 0, y: 0, z: 0, a: 0, active: false };
+    });
+
+    function pollGamepad() {
+      if (!navigator.getGamepads) return;
+      const pads = navigator.getGamepads();
+      const gp = pads && (pads[0] || pads[1] || pads[2] || pads[3]);
+      if (!gp) return;
+
+      const dz = v => (Math.abs(v) < 0.16 ? 0 : v);
+      const lx = dz(gp.axes[0] || 0);
+      const ly = dz(-(gp.axes[1] || 0));
+      const rx = dz(gp.axes[2] || 0);
+      const ry = dz(-(gp.axes[3] || 0));
+      gpVec = { x: lx, y: ly, z: ry, a: rx, active: (lx !== 0 || ly !== 0 || rx !== 0 || ry !== 0) };
+
+      const btns = gp.buttons.map(b => b && b.pressed);
+      // Button 0 (A / Cross): Toggle Gripper | Button 1 (B / Circle): Quick Stop | Button 3 (Y / Triangle): Teach Waypoint
+      if (btns[0] && !gpPrevButtons[0]) toggleGripperQuick();
+      if (btns[1] && !gpPrevButtons[1]) quickStop();
+      if (btns[3] && !gpPrevButtons[3]) captureTeachWaypoint();
+      gpPrevButtons = btns;
+    }
 
     (function initXYPad() {
       const pad = document.getElementById('xyPad');
@@ -1362,9 +1927,8 @@
       pad.addEventListener('pointercancel', releasePad);
     })();
 
-    // Runs at 30ms check rate, but strictly wall-clock gated to physical step duration (140ms)
-    // AND serialBusy === false so Marlin NEVER has more than 1 short 0.14s step in flight!
     setInterval(() => {
+      pollGamepad();
       const now = performance.now();
       if (now < nextJogStepAt) return;
       if (writer && (serialBusy || pendingMotion !== null)) return;
@@ -1378,7 +1942,12 @@
         if (Math.abs(padVec.x) > 0.12) vx = padVec.x;
         if (Math.abs(padVec.y) > 0.12) vy = padVec.y;
       }
-
+      if (gpVec.active) {
+        if (gpVec.x) vx = gpVec.x;
+        if (gpVec.y) vy = gpVec.y;
+        if (gpVec.z) vz = gpVec.z;
+        if (gpVec.a) va = gpVec.a;
+      }
       if (holdSpinDir !== 0) {
         selectedMotors.forEach(ax => {
           if (ax === 'X') vx = holdSpinDir;
@@ -1390,7 +1959,7 @@
 
       if (vx === 0 && vy === 0 && vz === 0 && va === 0) return;
 
-      const sliceSec = 0.14; // Bounded 140ms move (~16 deg at 120 deg/s) -> stops in <0.14s on keyup!
+      const sliceSec = 0.14;
       const spd = getSpeedDegSec();
       const vec = { X: vx, Y: vy, Z: vz, A: va };
       const move = {};
@@ -1407,12 +1976,15 @@
       });
 
       const vecFeed = Math.sqrt(magSq) * 60;
-      nextJogStepAt = now + (sliceSec * 1000) * 0.88; // Slight 12% overlap for seamless junction blending!
+      nextJogStepAt = now + (sliceSec * 1000) * 0.88;
       scheduleMotion(move, vecFeed);
       syncSlidersFromCmdPos();
+      syncIKFromCurrentFK();
     }, 30);
 
-    // --- SERIAL CONNECTION ---
+    // =========================================================================
+    // WEB SERIAL CONNECTION
+    // =========================================================================
     async function connectSerial() {
       if (!('serial' in navigator)) {
         alert('Web Serial requires Chrome or Edge.');
@@ -1431,9 +2003,8 @@
         readLoop();
         await writer.write(new TextEncoder().encode('\n'));
         await new Promise(r => setTimeout(r, 200));
-        // Strictly serialized setup — every command waits for Marlin 'ok'!
         await enqueueCmd('M999', true);
-        await enqueueCmd('M122 S0', true); // Silence any background UART chatter first!
+        await enqueueCmd('M122 S0', true);
         await enqueueCmd('G90', true);
         await enqueueCmd('G92 X0 Y0 Z0 A0', true);
         await enqueueCmd('M84 S0', true);
@@ -1445,6 +2016,7 @@
         await enqueueCmd('M569 S1 X Y Z A', true);
         ['X', 'Y', 'Z', 'A'].forEach(ax => { cmdPos[ax] = 0; projTarget[ax] = 0; projPos[ax] = 0; measPos[ax] = 0; });
         syncSlidersFromCmdPos();
+        syncIKFromCurrentFK();
         log('READY: 360 deg/s unlocked, pure G90 sync active.');
       } catch (err) {
         log('CONNECTION ERROR: ' + err.message);
@@ -1470,9 +2042,7 @@
               parseHardwareTelem(l);
               return;
             }
-            if (/^[XYZI]:\d+.*\|/.test(l) || l.startsWith('axis:pwm_scale')) {
-              return;
-            }
+            if (/^[XYZI]:\d+.*\|/.test(l) || l.startsWith('axis:pwm_scale')) return;
             const m114 = l.match(/^X:(-?\d+\.?\d*)\s+Y:(-?\d+\.?\d*)\s+Z:(-?\d+\.?\d*)\s+A:(-?\d+\.?\d*)/);
             if (m114) {
               ['X', 'Y', 'Z', 'A'].forEach((ax, idx) => {
@@ -1480,6 +2050,7 @@
                 cmdPos[ax] = v; measPos[ax] = v; projPos[ax] = v; projTarget[ax] = v;
               });
               syncSlidersFromCmdPos();
+              syncIKFromCurrentFK();
             }
             if (l.startsWith('ok')) {
               if (currentOkResolver) currentOkResolver();
@@ -1514,12 +2085,65 @@
     document.getElementById('connectBtn').addEventListener('click', connectSerial);
 
     // =========================================================================
-    // LIVE MEASURED vs PROJECTED TELEMETRY ENGINE (20 Hz Sample + 60 FPS Canvas)
+    // CANVAS INTERACTION (3D ORBIT + 2D CLICK-TO-REACH IK)
+    // =========================================================================
+    (function initCanvasInteraction() {
+      const cv = document.getElementById('telemetryCanvas');
+      function handle2DIKClick(e) {
+        const rect = cv.getBoundingClientRect();
+        const padL = 44, padR = 14, padT = 24, padB = 20;
+        const pw = rect.width - padL - padR, ph = rect.height - padT - padB;
+        const scale = Math.min(pw / 440, ph / 350);
+        const origX = padL + pw * 0.30;
+        const origY = padT + ph - 12;
+
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const targetR = Math.max(15, (mx - origX) / scale);
+        const targetZ = Math.max(5, (origY - my) / scale);
+
+        const yawRad = (cmdPos.X * Math.PI) / 180;
+        document.getElementById('ikX').value = Math.round(targetR * Math.cos(yawRad));
+        document.getElementById('ikY').value = Math.round(targetR * Math.sin(yawRad));
+        document.getElementById('ikZ').value = Math.round(targetZ);
+        solveAndApplyIK();
+      }
+
+      cv.addEventListener('pointerdown', e => {
+        cv.setPointerCapture(e.pointerId);
+        isDraggingCanvas = true;
+        dragLastX = e.clientX;
+        dragLastY = e.clientY;
+        if (graphMode === 'workspace') handle2DIKClick(e);
+      });
+      cv.addEventListener('pointermove', e => {
+        if (!isDraggingCanvas) return;
+        const dx = e.clientX - dragLastX;
+        const dy = e.clientY - dragLastY;
+        dragLastX = e.clientX;
+        dragLastY = e.clientY;
+        if (graphMode === 'twin3d') {
+          camYaw += dx * 0.01;
+          camPitch = Math.max(0.08, Math.min(1.35, camPitch + dy * 0.008));
+        } else if (graphMode === 'workspace') {
+          handle2DIKClick(e);
+        }
+      });
+      cv.addEventListener('pointerup', () => { isDraggingCanvas = false; });
+      cv.addEventListener('pointercancel', () => { isDraggingCanvas = false; });
+    })();
+
+    // =========================================================================
+    // 6-MODE TELEMETRY & 3D DIGITAL TWIN ENGINE
     // =========================================================================
     function setGraphMode(mode, tabEl) {
       graphMode = mode;
       document.querySelectorAll('#graphTabs .tab').forEach(t => t.classList.remove('active'));
       if (tabEl) tabEl.classList.add('active');
+      const hint = document.getElementById('canvasHint');
+      if (mode === 'twin3d') hint.textContent = 'DRAG TO ORBIT 3D CAMERA // DASHED = PROJECTED, SOLID = LIVE + TCP RIBBON';
+      else if (mode === 'workspace') hint.textContent = 'CLICK OR DRAG ANYWHERE IN 2D WORKSPACE TO SOLVE & DRIVE INVERSE KINEMATICS';
+      else hint.textContent = '';
     }
 
     function toggleGraphPause() {
@@ -1531,6 +2155,7 @@
 
     function clearTelemetry() {
       telemetry = [];
+      tcpTrail = [];
     }
 
     function exportTelemetryCSV() {
@@ -1542,18 +2167,8 @@
       const blob = new Blob([header + rows], { type: 'text/csv' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = 'ender-arm-live-vs-projected.csv';
+      a.download = 'ender-arm-telemetry.csv';
       a.click();
-    }
-
-    function fk2D(j2Deg, j3Deg) {
-      const th1 = (18 + j2Deg) * Math.PI / 180;
-      const th2 = th1 + (72 + j3Deg) * Math.PI / 180;
-      const elbR = 135 * Math.sin(th1);
-      const elbZ = 105 + 135 * Math.cos(th1);
-      const tipR = elbR + 160 * Math.sin(th2);
-      const tipZ = elbZ + 160 * Math.cos(th2);
-      return { elbR, elbZ, tipR, tipZ };
     }
 
     const t0 = performance.now();
@@ -1571,7 +2186,6 @@
         projPos[ax] += step;
 
         if (!hasHardwareStream) {
-          // Offline / legacy preview: simulate slight physical inertia + optional test drag
           const dragFactor = 1 - (simDrag / 130);
           const mDiff = projPos[ax] - measPos[ax];
           const mStep = mDiff * 0.42 * dragFactor;
@@ -1580,26 +2194,29 @@
         }
       });
 
+      updateHUDFromFK();
+
+      // Record 3D TCP ribbon point if moved > 2 mm
+      const mFK = fk3D(measPos.X, measPos.Y, measPos.Z);
+      const lastPt = tcpTrail.length ? tcpTrail[tcpTrail.length - 1] : null;
+      if (!lastPt || Math.hypot(mFK.tip.x - lastPt.x, mFK.tip.y - lastPt.y, mFK.tip.z - lastPt.z) > 2.2) {
+        tcpTrail.push({ x: mFK.tip.x, y: mFK.tip.y, z: mFK.tip.z });
+        if (tcpTrail.length > 95) tcpTrail.shift();
+      }
+
       const ax = selectedMotor;
       const isMoving = projVel[ax] > 2 || measVel[ax] > 2;
-
-      // Projected nominal load % (base coil + dynamic velocity/gravity component)
       const gravPct = ax === 'Y' ? Math.abs(Math.sin((18 + projPos.Y) * Math.PI / 180)) * 22 : (ax === 'Z' ? 12 : 6);
       const projLoad = isMoving ? Math.min(85, 16 + gravPct + (projVel[ax] / 220) * 18) : (6 + gravPct * 0.6);
 
-      // Measured load % from real TMC2209 StallGuard4 SG_RESULT + PWM_SCALE!
       let measLoad = projLoad;
       if (hasHardwareStream) {
         const sg = hwSG[ax];
         const base = Math.max(60, sgBaseline[ax]);
         if (measVel[ax] > 4 || projVel[ax] > 4) {
-          // StallGuard4: SG drops toward 0 as shaft resistance rises!
           const sgDropPct = Math.max(0, (1 - (sg / base)) * 85);
-          // PWM auto-scale boost under load
           const pwmBoost = Math.max(0, (hwPWM[ax] - pwmBaseline[ax]) * 0.6);
           measLoad = Math.min(100, projLoad + sgDropPct + pwmBoost);
-        } else {
-          measLoad = projLoad;
         }
       } else {
         measLoad = Math.min(100, projLoad + (isMoving ? simDrag : simDrag * 0.25));
@@ -1608,11 +2225,18 @@
       const delta = measLoad - projLoad;
       const lag = Math.abs(measPos[ax] - projPos[ax]);
 
+      // Check Cobot Safety Guard Tripwire!
+      const guardLimit = Number(document.getElementById('guardLimitSlider').value || 38);
+      if (safetyGuardEnabled && isMoving && delta >= guardLimit) {
+        triggerSafetyTrip(ax, delta);
+      }
+
       telemetry.push({
         t: (performance.now() - t0) / 1000,
         ax,
         pPos: projPos[ax],
         mPos: measPos[ax],
+        allMeas: { X: measPos.X, Y: measPos.Y, Z: measPos.Z, A: measPos.A },
         pVel: projVel[ax],
         mVel: measVel[ax],
         pLoad: projLoad,
@@ -1621,7 +2245,6 @@
       });
       if (telemetry.length > MAX_SAMPLES) telemetry.shift();
 
-      // Update KPI cells
       document.getElementById('mSgRaw').textContent = `${ax} // SG: ${hasHardwareStream ? hwSG[ax] : 'SIM'}`;
       document.getElementById('mLoadCmp').textContent = `${Math.round(measLoad)}% vs ${Math.round(projLoad)}%`;
       const dEl = document.getElementById('mDelta');
@@ -1634,6 +2257,19 @@
       }
       document.getElementById('mLag').textContent = `${lag.toFixed(1)}°`;
     }, 50);
+
+    // 3D Isometric Camera Projection Helper
+    function project3D(pt, cx, cy, scale) {
+      const cyaw = Math.cos(camYaw), syaw = Math.sin(camYaw);
+      const cp = Math.cos(camPitch), sp = Math.sin(camPitch);
+      // Center vertical around z=130mm
+      const x = pt.x, y = pt.y, z = pt.z - 130;
+      const rx = x * syaw + y * cyaw;
+      const ry = x * cyaw - y * syaw;
+      const sx = cx + rx * scale;
+      const sy = cy - (z * cp - ry * sp) * scale;
+      return { x: sx, y: sy };
+    }
 
     function drawTelemetryCanvas() {
       const canvas = document.getElementById('telemetryCanvas');
@@ -1650,223 +2286,359 @@
 
       ctx.fillStyle = '#050505';
       ctx.fillRect(0, 0, W, H);
-
-      const padL = 44, padR = 14, padT = 24, padB = 20;
-      const pw = W - padL - padR, ph = H - padT - padB;
-
-      // Grid
-      ctx.strokeStyle = '#171717';
-      ctx.lineWidth = 1;
-      for (let i = 0; i <= 4; i++) {
-        const gy = padT + (ph * i) / 4;
-        ctx.beginPath(); ctx.moveTo(padL, gy); ctx.lineTo(padL + pw, gy); ctx.stroke();
-      }
-      for (let i = 0; i <= 6; i++) {
-        const gx = padL + (pw * i) / 6;
-        ctx.beginPath(); ctx.moveTo(gx, padT); ctx.lineTo(gx, padT + ph); ctx.stroke();
-      }
-
       ctx.font = '10px SFMono-Regular, Consolas, monospace';
 
-      if (graphMode === 'resistance') {
-        // GRAPH 1: REAL-TIME SHAFT RESISTANCE (SOLID RED) vs PROJECTED LOAD (DASHED WHITE)
-        ctx.fillStyle = '#f5f5f5';
-        ctx.fillText(`-- PROJECTED LOAD (%)`, padL, 14);
-        ctx.fillStyle = '#e52521';
-        ctx.fillText(`━━ MEASURED RESISTANCE [${selectedMotor}]`, padL + 150, 14);
+      if (graphMode === 'twin3d') {
+        // GRAPH 01: INTERACTIVE 3D ISOMETRIC DIGITAL TWIN
+        const cx = W * 0.48, cy = H * 0.56;
+        const sc = Math.min(W, H) / 460;
 
-        ctx.fillStyle = '#777';
-        ctx.fillText('100%', 6, padT + 4);
-        ctx.fillText(' 50%', 6, padT + ph / 2 + 3);
-        ctx.fillText('  0%', 6, padT + ph);
+        // 3D Floor Grid (-240..+240 mm, step 60 mm)
+        ctx.strokeStyle = '#161616';
+        ctx.lineWidth = 1;
+        for (let g = -240; g <= 240; g += 60) {
+          const a1 = project3D({ x: g, y: -240, z: 0 }, cx, cy, sc);
+          const a2 = project3D({ x: g, y: 240, z: 0 }, cx, cy, sc);
+          ctx.beginPath(); ctx.moveTo(a1.x, a1.y); ctx.lineTo(a2.x, a2.y); ctx.stroke();
+          const b1 = project3D({ x: -240, y: g, z: 0 }, cx, cy, sc);
+          const b2 = project3D({ x: 240, y: g, z: 0 }, cx, cy, sc);
+          ctx.beginPath(); ctx.moveTo(b1.x, b1.y); ctx.lineTo(b2.x, b2.y); ctx.stroke();
+        }
+        // X/Y Ground Axes
+        const o0 = project3D({ x: 0, y: 0, z: 0 }, cx, cy, sc);
+        const ox = project3D({ x: 240, y: 0, z: 0 }, cx, cy, sc);
+        ctx.strokeStyle = 'rgba(229, 37, 33, 0.4)';
+        ctx.beginPath(); ctx.moveTo(o0.x, o0.y); ctx.lineTo(ox.x, ox.y); ctx.stroke();
 
-        if (telemetry.length >= 2) {
-          // Shaded red resistance-excess zone where Measured > Projected
-          ctx.fillStyle = 'rgba(229, 37, 33, 0.22)';
+        // Base Pedestal Cylinder Ring
+        ctx.strokeStyle = '#3a3a3a';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        for (let i = 0; i <= 28; i++) {
+          const ang = (i / 28) * Math.PI * 2;
+          const p = project3D({ x: 58 * Math.cos(ang), y: 58 * Math.sin(ang), z: 0 }, cx, cy, sc);
+          if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+        }
+        ctx.stroke();
+
+        // TCP 3D Ribbon Trail
+        if (tcpTrail.length >= 2) {
+          ctx.strokeStyle = 'rgba(229, 37, 33, 0.55)';
+          ctx.lineWidth = 1.6;
           ctx.beginPath();
-          telemetry.forEach((pt, i) => {
-            const px = padL + (i / (MAX_SAMPLES - 1)) * pw;
-            const py = padT + ph - (Math.max(pt.mLoad, pt.pLoad) / 100) * ph;
-            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-          });
-          for (let i = telemetry.length - 1; i >= 0; i--) {
-            const px = padL + (i / (MAX_SAMPLES - 1)) * pw;
-            const py = padT + ph - (telemetry[i].pLoad / 100) * ph;
-            ctx.lineTo(px, py);
-          }
-          ctx.closePath();
-          ctx.fill();
-
-          // Projected dashed white
-          ctx.strokeStyle = '#d0d0d0';
-          ctx.lineWidth = 1.4;
-          ctx.setLineDash([5, 4]);
-          ctx.beginPath();
-          telemetry.forEach((pt, i) => {
-            const px = padL + (i / (MAX_SAMPLES - 1)) * pw;
-            const py = padT + ph - (pt.pLoad / 100) * ph;
-            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-          });
-          ctx.stroke();
-          ctx.setLineDash([]);
-
-          // Measured solid red
-          ctx.strokeStyle = '#e52521';
-          ctx.lineWidth = 2.1;
-          ctx.beginPath();
-          telemetry.forEach((pt, i) => {
-            const px = padL + (i / (MAX_SAMPLES - 1)) * pw;
-            const py = padT + ph - (pt.mLoad / 100) * ph;
-            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+          tcpTrail.forEach((pt, idx) => {
+            const sp = project3D(pt, cx, cy, sc);
+            if (idx === 0) ctx.moveTo(sp.x, sp.y); else ctx.lineTo(sp.x, sp.y);
           });
           ctx.stroke();
         }
 
-      } else if (graphMode === 'trajectory') {
-        // GRAPH 2: MEASURED STEPPER POSITION (SOLID RED) vs PROJECTED TARGET PATH (DASHED WHITE)
-        ctx.fillStyle = '#f5f5f5';
-        ctx.fillText(`-- PROJECTED ANGLE (${selectedMotor})`, padL, 14);
-        ctx.fillStyle = '#e52521';
-        ctx.fillText(`━━ LIVE MEASURED ANGLE (${selectedMotor})`, padL + 165, 14);
+        const pFK = fk3D(projTarget.X, projTarget.Y, projTarget.Z);
+        const mFK = fk3D(measPos.X, measPos.Y, measPos.Z);
 
-        let maxAbs = 180;
-        telemetry.forEach(pt => {
-          maxAbs = Math.max(maxAbs, Math.abs(pt.pPos) * 1.1, Math.abs(pt.mPos) * 1.1);
-        });
-
-        ctx.fillStyle = '#777';
-        ctx.fillText(`+${Math.round(maxAbs)}°`, 2, padT + 4);
-        ctx.fillText(`  0°`, 8, padT + ph / 2 + 3);
-        ctx.fillText(`-${Math.round(maxAbs)}°`, 2, padT + ph);
-
-        ctx.strokeStyle = '#282828';
-        ctx.beginPath(); ctx.moveTo(padL, padT + ph / 2); ctx.lineTo(padL + pw, padT + ph / 2); ctx.stroke();
-
-        if (telemetry.length >= 2) {
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 1.5;
-          ctx.setLineDash([5, 4]);
-          ctx.beginPath();
-          telemetry.forEach((pt, i) => {
-            const px = padL + (i / (MAX_SAMPLES - 1)) * pw;
-            const py = padT + ph / 2 - (pt.pPos / maxAbs) * (ph / 2);
-            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-          });
-          ctx.stroke();
-          ctx.setLineDash([]);
-
-          ctx.strokeStyle = '#e52521';
-          ctx.lineWidth = 2.0;
-          ctx.beginPath();
-          telemetry.forEach((pt, i) => {
-            const px = padL + (i / (MAX_SAMPLES - 1)) * pw;
-            const py = padT + ph / 2 - (pt.mPos / maxAbs) * (ph / 2);
-            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-          });
-          ctx.stroke();
-        }
-
-      } else if (graphMode === 'velocity') {
-        // GRAPH 3: MEASURED ANGULAR VELOCITY (SOLID RED) vs COMMANDED VELOCITY (DASHED WHITE)
-        const maxV = Math.max(100, getSpeedDegSec() * 1.35);
-        ctx.fillStyle = '#f5f5f5';
-        ctx.fillText(`-- PROJECTED VEL (°/s)`, padL, 14);
-        ctx.fillStyle = '#e52521';
-        ctx.fillText(`━━ MEASURED VEL [${selectedMotor}]`, padL + 160, 14);
-
-        ctx.fillStyle = '#777';
-        ctx.fillText(`${Math.round(maxV)}`, 8, padT + 4);
-        ctx.fillText(`0`, 20, padT + ph);
-
-        if (telemetry.length >= 2) {
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 1.5;
-          ctx.setLineDash([5, 4]);
-          ctx.beginPath();
-          telemetry.forEach((pt, i) => {
-            const px = padL + (i / (MAX_SAMPLES - 1)) * pw;
-            const py = padT + ph - Math.min(1, pt.pVel / maxV) * ph;
-            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-          });
-          ctx.stroke();
-          ctx.setLineDash([]);
-
-          ctx.strokeStyle = '#e52521';
-          ctx.lineWidth = 2.0;
-          ctx.beginPath();
-          telemetry.forEach((pt, i) => {
-            const px = padL + (i / (MAX_SAMPLES - 1)) * pw;
-            const py = padT + ph - Math.min(1, pt.mVel / maxV) * ph;
-            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-          });
-          ctx.stroke();
-        }
-
-      } else if (graphMode === 'workspace') {
-        // GRAPH 4: 2D GHOST TARGET ARM (DASHED) vs LIVE HARDWARE ARM (SOLID + RED LOAD HALO)
-        ctx.fillStyle = '#888';
-        ctx.fillText(`-- PROJECTED TARGET POSE`, padL, 14);
-        ctx.fillStyle = '#e52521';
-        ctx.fillText(`━━ LIVE MEASURED POSE`, padL + 175, 14);
-
-        const scale = Math.min(pw / 420, ph / 330);
-        const origX = padL + pw * 0.34;
-        const origY = padT + ph - 10;
-        const shX = origX, shY = origY - 105 * scale;
-
-        ctx.strokeStyle = '#2b2b2b';
-        ctx.beginPath(); ctx.moveTo(padL, origY); ctx.lineTo(padL + pw, origY); ctx.stroke();
-
-        const pFK = fk2D(projTarget.Y, projTarget.Z);
-        const mFK = fk2D(measPos.Y, measPos.Z);
-
-        // Ghost Projected Target Arm (dashed white)
-        ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+        // Projected Ghost Arm (Dashed White)
+        const ps0 = project3D({ x: 0, y: 0, z: 0 }, cx, cy, sc);
+        const ps1 = project3D(pFK.sh, cx, cy, sc);
+        const ps2 = project3D(pFK.elb, cx, cy, sc);
+        const ps3 = project3D(pFK.tip, cx, cy, sc);
+        ctx.strokeStyle = 'rgba(255,255,255,0.32)';
         ctx.lineWidth = 2;
         ctx.setLineDash([4, 4]);
         ctx.beginPath();
-        ctx.moveTo(shX, shY);
-        ctx.lineTo(origX + pFK.elbR * scale, origY - pFK.elbZ * scale);
-        ctx.lineTo(origX + pFK.tipR * scale, origY - pFK.tipZ * scale);
+        ctx.moveTo(ps1.x, ps1.y); ctx.lineTo(ps2.x, ps2.y); ctx.lineTo(ps3.x, ps3.y);
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // Base Pedestal
-        ctx.strokeStyle = '#555'; ctx.lineWidth = 5;
-        ctx.beginPath(); ctx.moveTo(origX, origY); ctx.lineTo(shX, shY); ctx.stroke();
+        // Drop shadow from Measured TCP to Z=0 floor
+        const mFloor = project3D({ x: mFK.tip.x, y: mFK.tip.y, z: 0 }, cx, cy, sc);
+        const ms1 = project3D(mFK.sh, cx, cy, sc);
+        const ms2 = project3D(mFK.elb, cx, cy, sc);
+        const ms3 = project3D(mFK.tip, cx, cy, sc);
+        ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 3]);
+        ctx.beginPath(); ctx.moveTo(ms3.x, ms3.y); ctx.lineTo(mFloor.x, mFloor.y); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(229,37,33,0.45)';
+        ctx.beginPath(); ctx.arc(mFloor.x, mFloor.y, 3, 0, Math.PI * 2); ctx.fill();
 
-        // Live Measured Arm
-        const elbX = origX + mFK.elbR * scale, elbY = origY - mFK.elbZ * scale;
-        const tipX = origX + mFK.tipR * scale, tipY = origY - mFK.tipZ * scale;
+        // Solid Pedestal + Live Measured Links
+        ctx.strokeStyle = '#666'; ctx.lineWidth = 7;
+        ctx.beginPath(); ctx.moveTo(ps0.x, ps0.y); ctx.lineTo(ms1.x, ms1.y); ctx.stroke();
+
+        ctx.strokeStyle = '#e8e8e8'; ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.moveTo(ms1.x, ms1.y); ctx.lineTo(ms2.x, ms2.y); ctx.stroke();
+
         ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3.5;
-        ctx.beginPath(); ctx.moveTo(shX, shY); ctx.lineTo(elbX, elbY); ctx.lineTo(tipX, tipY); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(ms2.x, ms2.y); ctx.lineTo(ms3.x, ms3.y); ctx.stroke();
 
-        // Resistance glow halo on active joint
+        // Animated Gripper V-Jaws oriented with J1 yaw + J4 roll
+        const gObj = JOINTS.find(j => j.id === 'G');
+        const jawSpread = ((gObj ? gObj.val : 90) - 10) / 160 * 18 + 3;
+        const yawRad = (measPos.X * Math.PI) / 180;
+        const rollRad = (measPos.A * Math.PI) / 180;
+        const perpX = -Math.sin(yawRad) * Math.cos(rollRad) * jawSpread;
+        const perpY =  Math.cos(yawRad) * Math.cos(rollRad) * jawSpread;
+        const perpZ =  Math.sin(rollRad) * jawSpread;
+        const jL = project3D({ x: mFK.tip.x + perpX, y: mFK.tip.y + perpY, z: mFK.tip.z + perpZ }, cx, cy, sc);
+        const jR = project3D({ x: mFK.tip.x - perpX, y: mFK.tip.y - perpY, z: mFK.tip.z - perpZ }, cx, cy, sc);
+        ctx.strokeStyle = '#e52521'; ctx.lineWidth = 2.2;
+        ctx.beginPath(); ctx.moveTo(jL.x, jL.y); ctx.lineTo(ms3.x, ms3.y); ctx.lineTo(jR.x, jR.y); ctx.stroke();
+
+        // Resistance Halo
         const lastSample = telemetry.length ? telemetry[telemetry.length - 1] : { mLoad: 10, pLoad: 10 };
         const excess = Math.max(0, lastSample.mLoad - lastSample.pLoad);
         if (excess > 8) {
-          ctx.fillStyle = `rgba(229, 37, 33, ${Math.min(0.65, excess / 80)})`;
-          ctx.beginPath();
-          ctx.arc(shX, shY, 8 + excess * 0.25, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.fillStyle = `rgba(229, 37, 33, ${Math.min(0.65, excess / 75)})`;
+          ctx.beginPath(); ctx.arc(ms1.x, ms1.y, 9 + excess * 0.25, 0, Math.PI * 2); ctx.fill();
         }
 
-        [[origX, origY, '#666'], [shX, shY, '#fff'], [elbX, elbY, '#fff'], [tipX, tipY, '#e52521']].forEach(([jx, jy, c]) => {
-          ctx.fillStyle = c;
-          ctx.beginPath(); ctx.arc(jx, jy, 4, 0, Math.PI * 2); ctx.fill();
+        // Joint Nodes
+        [[ps0, '#555', 4], [ms1, '#fff', 5], [ms2, '#fff', 4.5], [ms3, '#e52521', 4.5]].forEach(([p, col, r]) => {
+          ctx.fillStyle = col;
+          ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
         });
 
-        ctx.fillStyle = '#aaa';
-        ctx.fillText(`J1 BASE: ${measPos.X.toFixed(1)}° (PROJ ${projTarget.X.toFixed(0)}°)`, padL + pw - 205, padT + 14);
+        ctx.fillStyle = '#f5f5f5';
+        ctx.fillText(`3D DIGITAL TWIN // J1:${measPos.X.toFixed(0)}° J2:${measPos.Y.toFixed(0)}° J3:${measPos.Z.toFixed(0)}° J4:${measPos.A.toFixed(0)}°`, 12, 16);
+
+      } else {
+        const padL = 44, padR = 14, padT = 24, padB = 22;
+        const pw = W - padL - padR, ph = H - padT - padB;
+
+        ctx.strokeStyle = '#171717';
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 4; i++) {
+          const gy = padT + (ph * i) / 4;
+          ctx.beginPath(); ctx.moveTo(padL, gy); ctx.lineTo(padL + pw, gy); ctx.stroke();
+        }
+        for (let i = 0; i <= 6; i++) {
+          const gx = padL + (pw * i) / 6;
+          ctx.beginPath(); ctx.moveTo(gx, padT); ctx.lineTo(gx, padT + ph); ctx.stroke();
+        }
+
+        if (graphMode === 'workspace') {
+          // GRAPH 02: 2D SIDE WORKSPACE + CLICK-TO-REACH INVERSE KINEMATICS
+          ctx.fillStyle = '#f5f5f5';
+          ctx.fillText(`-- PROJECTED POSE`, padL, 14);
+          ctx.fillStyle = '#e52521';
+          ctx.fillText(`━━ LIVE POSE (CLICK/DRAG TO SOLVE IK)`, padL + 135, 14);
+
+          const scale = Math.min(pw / 440, ph / 350);
+          const origX = padL + pw * 0.30;
+          const origY = padT + ph - 12;
+          const shX = origX, shY = origY - ARM_GEOM.z0 * scale;
+
+          // Max reach envelope arc
+          ctx.strokeStyle = 'rgba(229, 37, 33, 0.22)';
+          ctx.setLineDash([3, 4]);
+          ctx.beginPath();
+          ctx.arc(shX, shY, (ARM_GEOM.L1 + ARM_GEOM.L2) * scale, -Math.PI * 0.55, Math.PI * 0.42);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          ctx.strokeStyle = '#2b2b2b';
+          ctx.beginPath(); ctx.moveTo(padL, origY); ctx.lineTo(padL + pw, origY); ctx.stroke();
+
+          const pFK = fk3D(0, projTarget.Y, projTarget.Z);
+          const mFK = fk3D(0, measPos.Y, measPos.Z);
+
+          ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.moveTo(shX, shY);
+          ctx.lineTo(origX + pFK.elb.r * scale, origY - pFK.elb.z * scale);
+          ctx.lineTo(origX + pFK.tip.r * scale, origY - pFK.tip.z * scale);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          ctx.strokeStyle = '#555'; ctx.lineWidth = 5;
+          ctx.beginPath(); ctx.moveTo(origX, origY); ctx.lineTo(shX, shY); ctx.stroke();
+
+          const elbX = origX + mFK.elb.r * scale, elbY = origY - mFK.elb.z * scale;
+          const tipX = origX + mFK.tip.r * scale, tipY = origY - mFK.tip.z * scale;
+          ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3.5;
+          ctx.beginPath(); ctx.moveTo(shX, shY); ctx.lineTo(elbX, elbY); ctx.lineTo(tipX, tipY); ctx.stroke();
+
+          [[origX, origY, '#666'], [shX, shY, '#fff'], [elbX, elbY, '#fff'], [tipX, tipY, '#e52521']].forEach(([jx, jy, c]) => {
+            ctx.fillStyle = c;
+            ctx.beginPath(); ctx.arc(jx, jy, 4.5, 0, Math.PI * 2); ctx.fill();
+          });
+
+        } else if (graphMode === 'resistance') {
+          ctx.fillStyle = '#f5f5f5';
+          ctx.fillText(`-- PROJECTED LOAD (%)`, padL, 14);
+          ctx.fillStyle = '#e52521';
+          ctx.fillText(`━━ MEASURED RESISTANCE [${selectedMotor}]`, padL + 150, 14);
+
+          ctx.fillStyle = '#777';
+          ctx.fillText('100%', 6, padT + 4);
+          ctx.fillText(' 50%', 6, padT + ph / 2 + 3);
+          ctx.fillText('  0%', 6, padT + ph);
+
+          // Draw Cobot Guard Threshold line if enabled
+          if (safetyGuardEnabled) {
+            const lim = Number(document.getElementById('guardLimitSlider').value || 38);
+            const ly = padT + ph - (Math.min(100, 20 + lim) / 100) * ph;
+            ctx.strokeStyle = 'rgba(229, 37, 33, 0.55)';
+            ctx.setLineDash([2, 3]);
+            ctx.beginPath(); ctx.moveTo(padL, ly); ctx.lineTo(padL + pw, ly); ctx.stroke();
+            ctx.setLineDash([]);
+          }
+
+          if (telemetry.length >= 2) {
+            ctx.fillStyle = 'rgba(229, 37, 33, 0.22)';
+            ctx.beginPath();
+            telemetry.forEach((pt, i) => {
+              const px = padL + (i / (MAX_SAMPLES - 1)) * pw;
+              const py = padT + ph - (Math.max(pt.mLoad, pt.pLoad) / 100) * ph;
+              if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            });
+            for (let i = telemetry.length - 1; i >= 0; i--) {
+              const px = padL + (i / (MAX_SAMPLES - 1)) * pw;
+              const py = padT + ph - (telemetry[i].pLoad / 100) * ph;
+              ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.strokeStyle = '#d0d0d0'; ctx.lineWidth = 1.4; ctx.setLineDash([5, 4]);
+            ctx.beginPath();
+            telemetry.forEach((pt, i) => {
+              const px = padL + (i / (MAX_SAMPLES - 1)) * pw;
+              const py = padT + ph - (pt.pLoad / 100) * ph;
+              if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            });
+            ctx.stroke(); ctx.setLineDash([]);
+
+            ctx.strokeStyle = '#e52521'; ctx.lineWidth = 2.1;
+            ctx.beginPath();
+            telemetry.forEach((pt, i) => {
+              const px = padL + (i / (MAX_SAMPLES - 1)) * pw;
+              const py = padT + ph - (pt.mLoad / 100) * ph;
+              if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            });
+            ctx.stroke();
+          }
+
+        } else if (graphMode === 'trajectory') {
+          ctx.fillStyle = '#f5f5f5';
+          ctx.fillText(`-- PROJECTED ANGLE (${selectedMotor})`, padL, 14);
+          ctx.fillStyle = '#e52521';
+          ctx.fillText(`━━ LIVE MEASURED ANGLE (${selectedMotor})`, padL + 165, 14);
+
+          let maxAbs = 180;
+          telemetry.forEach(pt => { maxAbs = Math.max(maxAbs, Math.abs(pt.pPos) * 1.1, Math.abs(pt.mPos) * 1.1); });
+
+          ctx.fillStyle = '#777';
+          ctx.fillText(`+${Math.round(maxAbs)}°`, 2, padT + 4);
+          ctx.fillText(`  0°`, 8, padT + ph / 2 + 3);
+          ctx.fillText(`-${Math.round(maxAbs)}°`, 2, padT + ph);
+
+          if (telemetry.length >= 2) {
+            ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+            ctx.beginPath();
+            telemetry.forEach((pt, i) => {
+              const px = padL + (i / (MAX_SAMPLES - 1)) * pw;
+              const py = padT + ph / 2 - (pt.pPos / maxAbs) * (ph / 2);
+              if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            });
+            ctx.stroke(); ctx.setLineDash([]);
+
+            ctx.strokeStyle = '#e52521'; ctx.lineWidth = 2.0;
+            ctx.beginPath();
+            telemetry.forEach((pt, i) => {
+              const px = padL + (i / (MAX_SAMPLES - 1)) * pw;
+              const py = padT + ph / 2 - (pt.mPos / maxAbs) * (ph / 2);
+              if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            });
+            ctx.stroke();
+          }
+
+        } else if (graphMode === 'velocity') {
+          const maxV = Math.max(100, getSpeedDegSec() * 1.35);
+          ctx.fillStyle = '#f5f5f5';
+          ctx.fillText(`-- PROJECTED VEL (°/s)`, padL, 14);
+          ctx.fillStyle = '#e52521';
+          ctx.fillText(`━━ MEASURED VEL [${selectedMotor}]`, padL + 160, 14);
+
+          ctx.fillStyle = '#777';
+          ctx.fillText(`${Math.round(maxV)}`, 8, padT + 4);
+          ctx.fillText(`0`, 20, padT + ph);
+
+          if (telemetry.length >= 2) {
+            ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+            ctx.beginPath();
+            telemetry.forEach((pt, i) => {
+              const px = padL + (i / (MAX_SAMPLES - 1)) * pw;
+              const py = padT + ph - Math.min(1, pt.pVel / maxV) * ph;
+              if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            });
+            ctx.stroke(); ctx.setLineDash([]);
+
+            ctx.strokeStyle = '#e52521'; ctx.lineWidth = 2.0;
+            ctx.beginPath();
+            telemetry.forEach((pt, i) => {
+              const px = padL + (i / (MAX_SAMPLES - 1)) * pw;
+              const py = padT + ph - Math.min(1, pt.mVel / maxV) * ph;
+              if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            });
+            ctx.stroke();
+          }
+
+        } else if (graphMode === 'multiaxis') {
+          // GRAPH 06: ALL 4 MOTORS SYNCHRONIZED TRACE
+          const styles = [
+            { ax: 'X', col: '#e52521', dash: [], lbl: 'J1[X]' },
+            { ax: 'Y', col: '#ffffff', dash: [], lbl: 'J2[Y]' },
+            { ax: 'Z', col: '#9e9e9e', dash: [4, 3], lbl: 'J3[Z]' },
+            { ax: 'A', col: '#e52521', dash: [2, 3], lbl: 'J4[A]' }
+          ];
+          styles.forEach((s, idx) => {
+            ctx.fillStyle = s.col;
+            ctx.fillText(`${s.dash.length ? '--' : '━━'} ${s.lbl}`, padL + idx * 78, 14);
+          });
+
+          let maxAbs = 180;
+          telemetry.forEach(pt => {
+            if (pt.allMeas) {
+              ['X', 'Y', 'Z', 'A'].forEach(k => { maxAbs = Math.max(maxAbs, Math.abs(pt.allMeas[k]) * 1.1); });
+            }
+          });
+          ctx.fillStyle = '#777';
+          ctx.fillText(`+${Math.round(maxAbs)}°`, 2, padT + 4);
+          ctx.fillText(`  0°`, 8, padT + ph / 2 + 3);
+          ctx.fillText(`-${Math.round(maxAbs)}°`, 2, padT + ph);
+
+          if (telemetry.length >= 2) {
+            styles.forEach(s => {
+              ctx.strokeStyle = s.col;
+              ctx.lineWidth = 1.7;
+              ctx.setLineDash(s.dash);
+              ctx.beginPath();
+              telemetry.forEach((pt, i) => {
+                const v = pt.allMeas ? pt.allMeas[s.ax] : 0;
+                const px = padL + (i / (MAX_SAMPLES - 1)) * pw;
+                const py = padT + ph / 2 - (v / maxAbs) * (ph / 2);
+                if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+              });
+              ctx.stroke();
+            });
+            ctx.setLineDash([]);
+          }
+        }
       }
 
       ctx.restore();
       requestAnimationFrame(drawTelemetryCanvas);
     }
 
-    // --- ROUTINES ---
+    // =========================================================================
+    // ROUTINES DATABASE
+    // =========================================================================
     function persistApps() {
-      localStorage.setItem('ender_arm_apps_v2', JSON.stringify(apps));
+      localStorage.setItem('ender_arm_apps_v3', JSON.stringify(apps));
       renderApps();
     }
 
@@ -1894,7 +2666,8 @@
       let gcode = document.getElementById('appSteps').value.trim();
       if (!name) { alert('Enter a routine name.'); return; }
       if (!gcode) {
-        recordKeyframe();
+        if (teachWaypoints.length > 0) promoteStripToEditor();
+        else recordKeyframe();
         gcode = document.getElementById('appSteps').value.trim();
       }
       apps.unshift({ id: 'app-' + Date.now(), name, gcode });
@@ -1913,14 +2686,15 @@
       if (!app) return;
       routineAbort = false;
       document.getElementById('routineStatusRow').style.display = 'flex';
+      const lines = app.gcode.split('\n').filter(l => l.split(';')[0].trim());
       log(`SEQUENCE START: ${app.name}${loop ? ' [LOOP]' : ''}`);
       do {
-        for (const line of app.gcode.split('\n')) {
+        for (let idx = 0; idx < lines.length; idx++) {
           if (routineAbort) break;
-          const clean = line.split(';')[0].trim();
-          if (!clean) continue;
+          const clean = lines[idx].split(';')[0].trim();
+          document.getElementById('routineStatusTxt').textContent = `${app.name} [${idx + 1}/${lines.length}]`;
           if (writer) await sendAndWait(clean);
-          else { interceptProjectedGcode(clean); await new Promise(r => setTimeout(r, 450)); }
+          else { interceptProjectedGcode(clean); await new Promise(r => setTimeout(r, 420)); }
         }
       } while (loop && !routineAbort);
       document.getElementById('routineStatusRow').style.display = 'none';
@@ -1962,10 +2736,10 @@
     }
 
     function exportDB() {
-      const blob = new Blob([JSON.stringify(apps, null, 2)], { type: 'application/json' });
+      const blob = new Blob([JSON.stringify({ apps, teachWaypoints }, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = 'ender-arm-routines.json';
+      a.download = 'ender-arm-studio-backup.json';
       a.click();
     }
 
@@ -1977,13 +2751,19 @@
         try {
           const parsed = JSON.parse(r.result);
           if (Array.isArray(parsed)) { apps = parsed; persistApps(); }
+          else if (parsed && Array.isArray(parsed.apps)) {
+            apps = parsed.apps; persistApps();
+            if (Array.isArray(parsed.teachWaypoints)) { teachWaypoints = parsed.teachWaypoints; persistWaypoints(); }
+          }
         } catch { alert('Invalid JSON file.'); }
       };
       r.readAsText(file);
     }
 
     renderJoints();
+    renderWaypoints();
     renderApps();
+    syncIKFromCurrentFK();
     requestAnimationFrame(drawTelemetryCanvas);
   </script>
 </body>
